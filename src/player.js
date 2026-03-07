@@ -55,14 +55,14 @@ function ensureVoiceEncryptionDependency() {
   });
 
   const report = generateDependencyReport();
-  const hasEncryptionLibrary =
-    hasInstalledEncryptionLibrary ||
-    /(@stablelib\/xchacha20poly1305|@noble\/ciphers|sodium-native|sodium|libsodium-wrappers)\b/i.test(report);
+  const hasEncryptionLibrary = hasInstalledEncryptionLibrary;
 
   if (!hasEncryptionLibrary) {
-    throw new Error(
-      'Discord voice encryption dependency missing. Install one of: libsodium-wrappers, sodium, sodium-native, @noble/ciphers, @stablelib/xchacha20poly1305.'
+    const error = new Error(
+      'Discord voice encryption dependency missing. Install one of: libsodium-wrappers, sodium, sodium-native, @noble/ciphers, @stablelib/xchacha20poly1305. Example: npm install libsodium-wrappers.'
     );
+    error.code = 'VOICE_ENCRYPTION_DEPENDENCY_MISSING';
+    throw error;
   }
 
   console.log(`[Voice] Dependency report:

@@ -186,6 +186,10 @@ function isVoiceConnectTimeoutError(error) {
   return error?.code === 'VOICE_CONNECT_TIMEOUT';
 }
 
+function isVoiceEncryptionDependencyError(error) {
+  return error?.code === 'VOICE_ENCRYPTION_DEPENDENCY_MISSING';
+}
+
 async function deferReplySafely(interaction) {
   if (interaction.deferred || interaction.replied) {
     return;
@@ -247,8 +251,6 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   try {
-    const player = getGuildPlayer(interaction.guildId);
-
     if (interaction.commandName === 'play') {
       const voiceChannel = interaction.member.voice.channel;
       if (!voiceChannel) {
@@ -271,6 +273,7 @@ client.on('interactionCreate', async (interaction) => {
         await deferReplySafely(interaction);
       }
 
+      const player = getGuildPlayer(interaction.guildId);
       await player.connectToVoiceChannel(voiceChannel);
 
       const shuffledPlaylist = shuffleArray(playlist);
@@ -280,18 +283,36 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.commandName === 'skip') {
+      const player = guildPlayers.get(interaction.guildId);
+      if (!player) {
+        await interaction.reply(ephemeralMessage('Nothing is playing right now.'));
+        return;
+      }
+
       player.skip();
       await interaction.reply('Skipped current track.');
       return;
     }
 
     if (interaction.commandName === 'shuffle') {
+      const player = guildPlayers.get(interaction.guildId);
+      if (!player) {
+        await interaction.reply(ephemeralMessage('Queue is empty right now.'));
+        return;
+      }
+
       player.shuffleQueue();
       await interaction.reply('Shuffled the queue.');
       return;
     }
 
     if (interaction.commandName === 'volume') {
+      const player = guildPlayers.get(interaction.guildId);
+      if (!player) {
+        await interaction.reply(ephemeralMessage('Nothing is playing right now.'));
+        return;
+      }
+
       const level = interaction.options.getInteger('level', true);
       const actual = player.setVolume(level);
       await interaction.reply(`Volume set to ${actual}%.`);
@@ -299,6 +320,12 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.commandName === 'leave') {
+      const player = guildPlayers.get(interaction.guildId);
+      if (!player) {
+        await interaction.reply(ephemeralMessage('Not connected to a voice channel.'));
+        return;
+      }
+
       player.leave();
       await interaction.reply('Left the voice channel and cleared queue.');
       return;
@@ -326,6 +353,17 @@ client.on('interactionCreate', async (interaction) => {
 
     await replySafely(interaction, ephemeralMessage('Unknown command.'));
   } catch (error) {
+    if (isVoiceEncryptionDependencyError(error)) {
+      console.warn('Voice encryption dependency missing in runtime environment.');
+      await replySafely(
+        interaction,
+        ephemeralMessage(
+          'Voice dependency missing. Run `npm install libsodium-wrappers` (or install another supported encryption library) and restart the bot.'
+        )
+      );
+      return;
+    }
+
     if (isVoiceConnectTimeoutError(error)) {
       console.warn('Voice connection timed out before becoming ready.');
       await replySafely(interaction, ephemeralMessage('Could not connect to the voice channel in time. Please try again.'));

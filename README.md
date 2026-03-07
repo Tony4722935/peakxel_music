@@ -24,13 +24,18 @@ music/
    ```bash
    npm install
    ```
-2. Create a Discord application + bot and invite it to your server with bot + applications.commands scopes.
-3. Configure environment values (the app automatically loads them from a local `.env` file if present):
+2. (Recommended for local npm runs) install a Discord voice encryption backend before using `/play`:
+   ```bash
+   npm install libsodium-wrappers
+   ```
+   If missing, voice commands will fail fast with a clear instruction instead of looping connection retries.
+3. Create a Discord application + bot and invite it to your server with bot + applications.commands scopes.
+4. Configure environment values (the app automatically loads them from a local `.env` file if present):
    - `DISCORD_TOKEN` (or `TOKEN`)
    - `DISCORD_CLIENT_ID` (or `APPLICATION_ID`)
    - `DISCORD_GUILD_ID` (or `DEV_GUILD`)
    - `MUSIC_ROOT` (optional, defaults to `./music`)
-  - `DISCORD_DNS_RESULT_ORDER` (optional, defaults to `ipv4first` to avoid IPv6 voice handshake issues in some Docker hosts)
+   - `DISCORD_DNS_RESULT_ORDER` (optional, defaults to `ipv4first` to avoid IPv6 voice handshake issues in some Docker hosts)
 
 Example `.env`:
 
@@ -96,5 +101,5 @@ The Docker image installs `ffmpeg` (required by the playback pipeline) and insta
 - The bot now prints detailed voice lifecycle logs (connection state changes, ready attempts, and queue/playback events) to help diagnose Docker/network issues.
 - If voice connect repeatedly times out in Docker, keep `DISCORD_DNS_RESULT_ORDER=ipv4first` (default) to prevent IPv6-first DNS resolution from breaking the Discord voice handshake on hosts without working IPv6 routing.
 - If logs loop between `connecting` and `signalling` in Docker, use `DOCKER_NETWORK_MODE=host` (default in `docker-compose.yml`) on Linux so Discord voice UDP packets are not blocked by bridge/NAT behavior.
-- The bot logs the `@discordjs/voice` dependency report at startup and validates that a currently supported encryption library is available (`@noble/ciphers`, `libsodium-wrappers`, `sodium`, `sodium-native`, or `@stablelib/xchacha20poly1305`). If none are detected, startup fails fast with a clear error before attempting voice joins.
+- The bot logs the `@discordjs/voice` dependency report at startup and validates that a currently supported encryption library is actually installed (`@noble/ciphers`, `libsodium-wrappers`, `sodium`, `sodium-native`, or `@stablelib/xchacha20poly1305`). If none are installed, `/play` now fails fast with a clear `npm install` hint before attempting voice joins.
 - After changing env vars, recreate the container: `docker compose up -d --build --force-recreate`.
