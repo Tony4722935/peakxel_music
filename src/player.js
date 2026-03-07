@@ -18,6 +18,7 @@ if (ffmpegStatic) {
 
 const VOICE_READY_TIMEOUT_MS = 20_000;
 const VOICE_CONNECT_MAX_ATTEMPTS = 5;
+const VOICE_RECONNECT_GRACE_MS = 5_000;
 
 function ensureFfmpegAvailable() {
   try {
@@ -83,6 +84,7 @@ class GuildMusicPlayer {
     this.current = null;
     this.volume = 1;
     this.connection = null;
+    this.connectionListenerCleanup = null;
 
     this.player.on(AudioPlayerStatus.Idle, () => {
       console.log('[Player] Audio player became idle, advancing queue.');
@@ -127,9 +129,7 @@ class GuildMusicPlayer {
       console.log(`[Voice][${guildId}] created new connection status=${this.connection.state.status}`);
     }
 
-    this.connection.on('stateChange', (oldState, newState) => {
-      console.log(`[Voice][${guildId}] connection state: ${oldState.status} -> ${newState.status}`);
-    });
+    this.attachConnectionListeners(guildId);
 
     try {
       await this.waitUntilReady(voiceChannel.id);
@@ -175,6 +175,10 @@ class GuildMusicPlayer {
         console.warn(`[Voice][${guildId}] ready wait failed on attempt ${attempt}:`, error?.message || error);
 
         if (attempt === VOICE_CONNECT_MAX_ATTEMPTS) {
+          break;
+        }
+
+        if (!this.connection) {
           break;
         }
 
@@ -243,6 +247,7 @@ class GuildMusicPlayer {
 
   leave() {
     if (this.connection) {
+      this.detachConnectionListeners();
       this.connection.destroy();
       this.connection = null;
     }
@@ -253,6 +258,54 @@ class GuildMusicPlayer {
     this.current = null;
   }
 }
+
+GuildMusicPlayer.prototype.attachConnectionListeners = function attachConnectionListeners(guildId) {
+  if (!this.connection) {
+    return;
+  }
+
+  this.detachConnectionListeners();
+
+  const connection = this.connection;
+
+  const onStateChange = async (oldState, newState) => {
+    console.log(`[Voice][${guildId}] connection state: ${oldState.status} -> ${newState.status}`);
+
+    if (newState.status !== VoiceConnectionStatus.Disconnected) {
+      return;
+    }
+
+    try {
+      await Promise.race([
+        entersState(connection, VoiceConnectionStatus.Signalling, VOICE_RECONNECT_GRACE_MS),
+        entersState(connection, VoiceConnectionStatus.Connecting, VOICE_RECONNECT_GRACE_MS)
+      ]);
+
+      console.log(`[Voice][${guildId}] disconnected briefly; waiting for reconnect sequence.`);
+    } catch {
+      console.warn(`[Voice][${guildId}] disconnected without recovery; destroying voice connection.`);
+      this.detachConnectionListeners();
+      connection.destroy();
+
+      if (this.connection === connection) {
+        this.connection = null;
+      }
+    }
+  };
+
+  connection.on('stateChange', onStateChange);
+
+  this.connectionListenerCleanup = () => {
+    connection.off('stateChange', onStateChange);
+  };
+};
+
+GuildMusicPlayer.prototype.detachConnectionListeners = function detachConnectionListeners() {
+  if (this.connectionListenerCleanup) {
+    this.connectionListenerCleanup();
+    this.connectionListenerCleanup = null;
+  }
+};
 
 module.exports = {
   GuildMusicPlayer,
