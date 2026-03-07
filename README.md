@@ -25,19 +25,24 @@ music/
    npm install
    ```
 2. Create a Discord application + bot and invite it to your server with bot + applications.commands scopes.
-3. Set env vars:
+3. Configure environment values (the app automatically loads them from a local `.env` file if present):
    - `DISCORD_TOKEN`
    - `DISCORD_CLIENT_ID`
    - `DISCORD_GUILD_ID` (your local test server/guild id)
    - `MUSIC_ROOT` (optional, defaults to `./music`)
 
-Example:
+Example `.env`:
+
+```dotenv
+DISCORD_TOKEN=...
+DISCORD_CLIENT_ID=...
+DISCORD_GUILD_ID=...
+MUSIC_ROOT=/path/to/your/music
+```
+
+Then run:
 
 ```bash
-export DISCORD_TOKEN="..."
-export DISCORD_CLIENT_ID="..."
-export DISCORD_GUILD_ID="..."
-export MUSIC_ROOT="/path/to/your/music"
 npm start
 ```
 
