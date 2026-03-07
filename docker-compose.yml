@@ -5,6 +5,10 @@ services:
       dockerfile: Dockerfile
     container_name: peakxel-discord-music
     restart: unless-stopped
+    # Voice UDP can fail behind some Docker bridge/NAT setups.
+    # Use host networking on Linux by default to make Discord voice joins reliable.
+    # Set DOCKER_NETWORK_MODE=bridge in .env if host mode is not supported on your platform.
+    network_mode: ${DOCKER_NETWORK_MODE:-host}
     environment:
       DISCORD_TOKEN: ${DISCORD_TOKEN:-${TOKEN:-}}
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-${APPLICATION_ID:-}}
