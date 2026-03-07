@@ -167,7 +167,12 @@ function isVoiceConnectTimeoutError(error) {
 
 async function replySafely(interaction, payload) {
   try {
-    if (interaction.deferred || interaction.replied) {
+    if (interaction.deferred && !interaction.replied) {
+      await interaction.editReply(payload);
+      return;
+    }
+
+    if (interaction.replied) {
       await interaction.followUp(payload);
       return;
     }
@@ -225,6 +230,10 @@ client.on('interactionCreate', async (interaction) => {
         return;
       }
 
+      if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferReply();
+      }
+
       await player.connectToVoiceChannel(voiceChannel);
 
       if (trackName) {
@@ -235,12 +244,12 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         player.enqueueTracks([chosenTrack]);
-        await interaction.reply(`Queued **${chosenTrack.name}** from **${playlistName}**.`);
+        await replySafely(interaction, `Queued **${chosenTrack.name}** from **${playlistName}**.`);
         return;
       }
 
       player.enqueueTracks(playlist);
-      await interaction.reply(`Queued ${playlist.length} tracks from **${playlistName}**.`);
+      await replySafely(interaction, `Queued ${playlist.length} tracks from **${playlistName}**.`);
       return;
     }
 
