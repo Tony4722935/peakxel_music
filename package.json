@@ -1,0 +1,18 @@
+{
+  "name": "peakxel-discord-music",
+  "version": "1.0.0",
+  "description": "Discord music bot that builds playlists from local folders on startup",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "check": "node --check src/index.js && node --check src/library.js && node --check src/player.js"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "dependencies": {
+    "@discordjs/voice": "^0.17.0",
+    "discord.js": "^14.16.3"
+  }
+}
