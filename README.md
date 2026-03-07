@@ -63,6 +63,8 @@ npm start
 
 The compose file mounts your host music library as read-only at `/music` in the container and sets `MUSIC_ROOT=/music`.
 
+The Docker image installs `ffmpeg` (required by the playback pipeline). If you were already running the bot, rebuild after pulling changes: `docker compose up -d --build --force-recreate`.
+
 ## Slash commands
 
 - `/play playlist:<name> [track:<name>]` – queue playlist or specific track.

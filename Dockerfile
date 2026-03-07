@@ -5,6 +5,7 @@ WORKDIR /app
 # ffmpeg is needed for decoding/transcoding local mp3/flac files.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg \
+    && ffmpeg -hide_banner -version \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
