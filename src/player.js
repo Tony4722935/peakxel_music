@@ -11,6 +11,46 @@ const {
 } = require('@discordjs/voice');
 const prism = require('prism-media');
 
+function ensureFfmpegAvailable() {
+  try {
+    const probe = new prism.FFmpeg({
+      args: ['-version']
+    });
+
+    probe.destroy();
+  } catch (error) {
+    throw new Error(
+      'FFmpeg is required for playback but was not found. Install ffmpeg in the runtime environment (Docker image should include it).'
+    );
+  }
+}
+
+function createTrackResource(track) {
+  const transcoder = new prism.FFmpeg({
+    args: [
+      '-hide_banner',
+      '-loglevel',
+      'panic',
+      '-i',
+      track.filePath,
+      '-analyzeduration',
+      '0',
+      '-f',
+      'opus',
+      '-ar',
+      '48000',
+      '-ac',
+      '2'
+    ]
+  });
+
+  return createAudioResource(transcoder, {
+    inputType: StreamType.Opus,
+    inlineVolume: true,
+    metadata: track
+  });
+}
+
 function shuffleArray(items) {
   const arr = [...items];
   for (let i = arr.length - 1; i > 0; i -= 1) {
@@ -22,6 +62,8 @@ function shuffleArray(items) {
 
 class GuildMusicPlayer {
   constructor() {
+    ensureFfmpegAvailable();
+
     this.player = createAudioPlayer({
       behaviors: {
         noSubscriber: NoSubscriberBehavior.Pause
@@ -77,6 +119,14 @@ class GuildMusicPlayer {
       return;
     }
 
+    let resource;
+    try {
+      resource = createTrackResource(next);
+    } catch (error) {
+      console.error(`Failed to create audio resource for track ${next.name}:`, error);
+      this.playNext();
+      return;
+    }
     const transcoder = new prism.FFmpeg({
       args: [
         '-hide_banner',
