@@ -87,31 +87,52 @@ class GuildMusicPlayer {
   }
 
   async connectToVoiceChannel(voiceChannel) {
-    const existing = getVoiceConnection(voiceChannel.guild.id);
+    const guildId = voiceChannel.guild.id;
+    const existing = getVoiceConnection(guildId);
+
     if (existing) {
+      const shouldRejoin = existing.joinConfig.channelId !== voiceChannel.id;
+      if (shouldRejoin) {
+        existing.rejoin({
+          channelId: voiceChannel.id,
+          selfDeaf: true
+        });
+      }
+
       this.connection = existing;
-      this.connection.subscribe(this.player);
-      return;
+    } else {
+      this.connection = joinVoiceChannel({
+        channelId: voiceChannel.id,
+        guildId,
+        adapterCreator: voiceChannel.guild.voiceAdapterCreator,
+        selfDeaf: true
+      });
     }
 
-    this.connection = joinVoiceChannel({
-      channelId: voiceChannel.id,
-      guildId: voiceChannel.guild.id,
-      adapterCreator: voiceChannel.guild.voiceAdapterCreator,
-      selfDeaf: false
-    });
-
     try {
-      await entersState(this.connection, VoiceConnectionStatus.Ready, 20_000);
+      if (this.connection.state.status !== VoiceConnectionStatus.Ready) {
+        await entersState(this.connection, VoiceConnectionStatus.Ready, 30_000);
+      }
       this.connection.subscribe(this.player);
     } catch (error) {
-      this.connection.destroy();
-      this.connection = null;
+      // Retry once before giving up because voice gateways occasionally fail the first handshake.
+      try {
+        this.connection.rejoin({
+          channelId: voiceChannel.id,
+          selfDeaf: true
+        });
+        await entersState(this.connection, VoiceConnectionStatus.Ready, 30_000);
+        this.connection.subscribe(this.player);
+        return;
+      } catch (retryError) {
+        this.connection.destroy();
+        this.connection = null;
 
-      const wrappedError = new Error('Timed out while connecting to the voice channel.');
-      wrappedError.code = 'VOICE_CONNECT_TIMEOUT';
-      wrappedError.cause = error;
-      throw wrappedError;
+        const wrappedError = new Error('Timed out while connecting to the voice channel.');
+        wrappedError.code = 'VOICE_CONNECT_TIMEOUT';
+        wrappedError.cause = retryError;
+        throw wrappedError;
+      }
     }
   }
 
