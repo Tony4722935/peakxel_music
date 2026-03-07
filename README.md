@@ -63,14 +63,14 @@ npm start
 
 The compose file mounts your host music library as read-only at `/music` in the container and sets `MUSIC_ROOT=/music`.
 
-The Docker image installs `ffmpeg` (required by the playback pipeline). If you were already running the bot, rebuild after pulling changes: `docker compose up -d --build --force-recreate`.
+The Docker image installs `ffmpeg` (required by the playback pipeline). Playback uses FFmpeg Opus output directly, so no additional Node Opus module is required in the container. If you were already running the bot, rebuild after pulling changes: `docker compose up -d --build --force-recreate`.
 
 ## Slash commands
 
 - `/play playlist:<name> [track:<name>]` – queue playlist or specific track.
 - `/skip` – skip current track.
 - `/shuffle` – shuffle queue.
-- `/volume level:<0-200>` – set volume.
+- `/volume level:<0-200>` – set volume for upcoming tracks (applies when next track starts).
 - `/leave` – leave voice channel and clear queue.
 - `/playlists` – list playlists discovered at startup.
 - `/help` – show command help.

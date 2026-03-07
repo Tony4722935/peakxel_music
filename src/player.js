@@ -25,7 +25,7 @@ function ensureFfmpegAvailable() {
   }
 }
 
-function createTrackResource(track) {
+function createTrackResource(track, volume = 1) {
   const transcoder = new prism.FFmpeg({
     args: [
       '-hide_banner',
@@ -35,6 +35,8 @@ function createTrackResource(track) {
       track.filePath,
       '-analyzeduration',
       '0',
+      '-af',
+      `volume=${volume}`,
       '-f',
       'opus',
       '-ar',
@@ -46,7 +48,6 @@ function createTrackResource(track) {
 
   return createAudioResource(transcoder, {
     inputType: StreamType.Opus,
-    inlineVolume: true,
     metadata: track
   });
 }
@@ -121,16 +122,12 @@ class GuildMusicPlayer {
 
     let resource;
     try {
-      resource = createTrackResource(next);
+      resource = createTrackResource(next, this.volume);
     } catch (error) {
       console.error(`Failed to create audio resource for track ${next.name}:`, error);
       this.playNext();
       return;
     }
-    if (resource.volume) {
-      resource.volume.setVolume(this.volume);
-    }
-
     this.player.play(resource);
   }
 
@@ -144,11 +141,6 @@ class GuildMusicPlayer {
 
   setVolume(percent) {
     this.volume = Math.max(0, Math.min(percent, 200)) / 100;
-
-    const current = this.player.state.resource;
-    if (current && current.volume) {
-      current.volume.setVolume(this.volume);
-    }
 
     return Math.round(this.volume * 100);
   }
