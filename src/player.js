@@ -20,6 +20,7 @@ if (ffmpegStatic) {
 const VOICE_READY_TIMEOUT_MS = 20_000;
 const VOICE_CONNECT_MAX_ATTEMPTS = 5;
 const VOICE_RECONNECT_GRACE_MS = 5_000;
+const VOICE_READY_RETRY_BACKOFF_MS = 1_500;
 
 function ensureFfmpegAvailable() {
   try {
@@ -198,38 +199,44 @@ class GuildMusicPlayer {
       console.log(
         `[Voice][${guildId}] waitUntilReady attempt ${attempt}/${VOICE_CONNECT_MAX_ATTEMPTS} (status=${this.connection?.state?.status || 'missing'})`
       );
+
       try {
         if (!this.connection) {
           throw new Error('Voice connection was not established.');
         }
 
-        if (this.connection.state.status !== VoiceConnectionStatus.Ready) {
-          await entersState(this.connection, VoiceConnectionStatus.Ready, VOICE_READY_TIMEOUT_MS);
-        }
-
+        await entersState(this.connection, VoiceConnectionStatus.Ready, VOICE_READY_TIMEOUT_MS);
         console.log(`[Voice][${guildId}] reached Ready state.`);
         return;
       } catch (error) {
         lastError = error;
         console.warn(`[Voice][${guildId}] ready wait failed on attempt ${attempt}:`, error?.message || error);
 
-        if (attempt === VOICE_CONNECT_MAX_ATTEMPTS) {
-          break;
-        }
-
-        if (!this.connection) {
+        if (attempt === VOICE_CONNECT_MAX_ATTEMPTS || !this.connection) {
           break;
         }
 
         const status = this.connection.state.status;
 
-        if (status === VoiceConnectionStatus.Signalling && this.lastVoiceChannel) {
+        this.connection.rejoin({
+          channelId,
+          selfDeaf: true,
+          selfMute: false
+        });
+        console.log(`[Voice][${guildId}] rejoin requested for channel=${channelId} after ${status} state.`);
+
+        await new Promise((resolve) => {
+          setTimeout(resolve, VOICE_READY_RETRY_BACKOFF_MS);
+        });
+
+        if (this.connection.state.status === VoiceConnectionStatus.Signalling && this.lastVoiceChannel) {
           console.warn(
-            `[Voice][${guildId}] connection stuck in signalling; recreating voice connection for channel=${channelId}`
+            `[Voice][${guildId}] still signalling after rejoin; rebuilding connection for channel=${channelId}`
           );
 
           this.detachConnectionListeners();
           this.connection.destroy();
+
           this.connection = joinVoiceChannel({
             channelId: this.lastVoiceChannel.id,
             guildId: this.lastVoiceChannel.guild.id,
@@ -240,15 +247,7 @@ class GuildMusicPlayer {
           this.attachConnectionListeners(guildId);
 
           console.log(`[Voice][${guildId}] created replacement connection status=${this.connection.state.status}`);
-          continue;
         }
-
-        this.connection.rejoin({
-          channelId,
-          selfDeaf: true,
-          selfMute: false
-        });
-        console.log(`[Voice][${guildId}] rejoin requested for channel=${channelId}`);
       }
     }
 
