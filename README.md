@@ -72,14 +72,13 @@ The Docker image installs `ffmpeg` (required by the playback pipeline). Playback
 
 ## Slash commands
 
-- `/play playlist:<name> [track:<name>]` – queue playlist or specific track.
+- `/play playlist:<name>` – queue the full playlist in a freshly shuffled order each time.
 - `/skip` – skip current track.
 - `/shuffle` – shuffle queue.
 - `/volume level:<0-200>` – set volume for upcoming tracks (applies when next track starts).
 - `/leave` – leave voice channel and clear queue.
 - `/playlists` – list playlists discovered at startup.
 - `/help` – show command help.
-- `/functions` – alias for `/help`.
 
 ## Notes
 
