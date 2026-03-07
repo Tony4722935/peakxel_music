@@ -56,8 +56,14 @@ class GuildMusicPlayer {
       selfDeaf: false
     });
 
-    await entersState(this.connection, VoiceConnectionStatus.Ready, 20_000);
-    this.connection.subscribe(this.player);
+    try {
+      await entersState(this.connection, VoiceConnectionStatus.Ready, 20_000);
+      this.connection.subscribe(this.player);
+    } catch (error) {
+      this.connection.destroy();
+      this.connection = null;
+      throw error;
+    }
   }
 
   enqueueTracks(tracks) {
