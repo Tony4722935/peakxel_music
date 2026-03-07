@@ -11,6 +11,7 @@ const {
   joinVoiceChannel
 } = require('@discordjs/voice');
 const ffmpegStatic = require('ffmpeg-static');
+const crypto = require('node:crypto');
 const prism = require('prism-media');
 
 if (ffmpegStatic) {
@@ -54,12 +55,14 @@ function ensureVoiceEncryptionDependency() {
     }
   });
 
+  const hasNativeAes256Gcm = crypto.getCiphers().includes('aes-256-gcm');
+
   const report = generateDependencyReport();
-  const hasEncryptionLibrary = hasInstalledEncryptionLibrary;
+  const hasEncryptionLibrary = hasInstalledEncryptionLibrary || hasNativeAes256Gcm;
 
   if (!hasEncryptionLibrary) {
     throw new Error(
-      'Discord voice encryption dependency missing. Install one of: libsodium-wrappers, sodium, sodium-native, @noble/ciphers, @stablelib/xchacha20poly1305. Example: npm install libsodium-wrappers.'
+      'Discord voice encryption dependency missing. Install one of: libsodium-wrappers, sodium, sodium-native, @noble/ciphers, @stablelib/xchacha20poly1305, or use a Node.js runtime with AES-256-GCM support.'
     );
   }
 
