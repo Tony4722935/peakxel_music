@@ -1,6 +1,7 @@
 const {
   AudioPlayerStatus,
   NoSubscriberBehavior,
+  StreamType,
   VoiceConnectionStatus,
   createAudioPlayer,
   createAudioResource,
@@ -8,6 +9,7 @@ const {
   getVoiceConnection,
   joinVoiceChannel
 } = require('@discordjs/voice');
+const prism = require('prism-media');
 
 function shuffleArray(items) {
   const arr = [...items];
@@ -75,8 +77,28 @@ class GuildMusicPlayer {
       return;
     }
 
-    const resource = createAudioResource(next.filePath, {
-      inlineVolume: true
+    const transcoder = new prism.FFmpeg({
+      args: [
+        '-hide_banner',
+        '-loglevel',
+        'panic',
+        '-i',
+        next.filePath,
+        '-analyzeduration',
+        '0',
+        '-f',
+        'opus',
+        '-ar',
+        '48000',
+        '-ac',
+        '2'
+      ]
+    });
+
+    const resource = createAudioResource(transcoder, {
+      inputType: StreamType.Opus,
+      inlineVolume: true,
+      metadata: next
     });
 
     if (resource.volume) {
