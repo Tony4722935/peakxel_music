@@ -85,6 +85,7 @@ class GuildMusicPlayer {
     this.volume = 1;
     this.connection = null;
     this.connectionListenerCleanup = null;
+    this.lastVoiceChannel = null;
 
     this.player.on(AudioPlayerStatus.Idle, () => {
       console.log('[Player] Audio player became idle, advancing queue.');
@@ -99,6 +100,7 @@ class GuildMusicPlayer {
 
   async connectToVoiceChannel(voiceChannel) {
     const guildId = voiceChannel.guild.id;
+    this.lastVoiceChannel = voiceChannel;
     console.log(
       `[Voice][${guildId}] connect requested: channel=${voiceChannel.id} name="${voiceChannel.name}" bitrate=${voiceChannel.bitrate}`
     );
@@ -180,6 +182,27 @@ class GuildMusicPlayer {
 
         if (!this.connection) {
           break;
+        }
+
+        const status = this.connection.state.status;
+
+        if (status === VoiceConnectionStatus.Signalling && this.lastVoiceChannel) {
+          console.warn(
+            `[Voice][${guildId}] connection stuck in signalling; recreating voice connection for channel=${channelId}`
+          );
+
+          this.detachConnectionListeners();
+          this.connection.destroy();
+          this.connection = joinVoiceChannel({
+            channelId: this.lastVoiceChannel.id,
+            guildId: this.lastVoiceChannel.guild.id,
+            adapterCreator: this.lastVoiceChannel.guild.voiceAdapterCreator,
+            selfDeaf: true
+          });
+          this.attachConnectionListeners(guildId);
+
+          console.log(`[Voice][${guildId}] created replacement connection status=${this.connection.state.status}`);
+          continue;
         }
 
         this.connection.rejoin({
