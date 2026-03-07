@@ -11,6 +11,9 @@ const {
 } = require('@discordjs/voice');
 const prism = require('prism-media');
 
+const VOICE_READY_TIMEOUT_MS = 60_000;
+const VOICE_CONNECT_MAX_ATTEMPTS = 3;
+
 function ensureFfmpegAvailable() {
   try {
     const probe = new prism.FFmpeg({
@@ -110,30 +113,43 @@ class GuildMusicPlayer {
     }
 
     try {
-      if (this.connection.state.status !== VoiceConnectionStatus.Ready) {
-        await entersState(this.connection, VoiceConnectionStatus.Ready, 30_000);
-      }
+      await this.waitUntilReady(voiceChannel.id);
       this.connection.subscribe(this.player);
     } catch (error) {
-      // Retry once before giving up because voice gateways occasionally fail the first handshake.
+      this.connection.destroy();
+      this.connection = null;
+
+      const wrappedError = new Error('Timed out while connecting to the voice channel.');
+      wrappedError.code = 'VOICE_CONNECT_TIMEOUT';
+      wrappedError.cause = error;
+      throw wrappedError;
+    }
+  }
+
+  async waitUntilReady(channelId) {
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= VOICE_CONNECT_MAX_ATTEMPTS; attempt += 1) {
       try {
+        if (this.connection.state.status !== VoiceConnectionStatus.Ready) {
+          await entersState(this.connection, VoiceConnectionStatus.Ready, VOICE_READY_TIMEOUT_MS);
+        }
+        return;
+      } catch (error) {
+        lastError = error;
+
+        if (attempt === VOICE_CONNECT_MAX_ATTEMPTS) {
+          break;
+        }
+
         this.connection.rejoin({
-          channelId: voiceChannel.id,
+          channelId,
           selfDeaf: true
         });
-        await entersState(this.connection, VoiceConnectionStatus.Ready, 30_000);
-        this.connection.subscribe(this.player);
-        return;
-      } catch (retryError) {
-        this.connection.destroy();
-        this.connection = null;
-
-        const wrappedError = new Error('Timed out while connecting to the voice channel.');
-        wrappedError.code = 'VOICE_CONNECT_TIMEOUT';
-        wrappedError.cause = retryError;
-        throw wrappedError;
       }
     }
+
+    throw lastError;
   }
 
   enqueueTracks(tracks) {
