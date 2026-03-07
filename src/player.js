@@ -38,7 +38,6 @@ function ensureFfmpegAvailable() {
 
 function ensureVoiceEncryptionDependency() {
   const encryptionPackages = [
-    'tweetnacl',
     'libsodium-wrappers',
     'sodium',
     'sodium-native',
@@ -57,11 +56,11 @@ function ensureVoiceEncryptionDependency() {
   const report = generateDependencyReport();
   const hasEncryptionLibrary =
     hasInstalledEncryptionLibrary ||
-    /(@stablelib\/xchacha20poly1305|@noble\/ciphers|sodium-native|sodium|libsodium-wrappers|tweetnacl)\b/i.test(report);
+    /(@stablelib\/xchacha20poly1305|@noble\/ciphers|sodium-native|sodium|libsodium-wrappers)\b/i.test(report);
 
   if (!hasEncryptionLibrary) {
     throw new Error(
-      'Discord voice encryption dependency missing. Install one of: tweetnacl, libsodium-wrappers, sodium, sodium-native, @noble/ciphers, @stablelib/xchacha20poly1305.'
+      'Discord voice encryption dependency missing. Install one of: libsodium-wrappers, sodium, sodium-native, @noble/ciphers, @stablelib/xchacha20poly1305.'
     );
   }
 
