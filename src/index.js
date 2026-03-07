@@ -1,4 +1,5 @@
 const path = require('path');
+const dns = require('node:dns');
 require('dotenv').config();
 const {
   Client,
@@ -51,6 +52,12 @@ const DISCORD_TOKEN = normalizeDiscordToken(process.env.DISCORD_TOKEN);
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 const DISCORD_GUILD_ID = process.env.DISCORD_GUILD_ID;
 const MUSIC_ROOT = process.env.MUSIC_ROOT || path.join(process.cwd(), 'music');
+const DISCORD_DNS_RESULT_ORDER = process.env.DISCORD_DNS_RESULT_ORDER || 'ipv4first';
+
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder(DISCORD_DNS_RESULT_ORDER);
+  console.log(`DNS result order set to: ${DISCORD_DNS_RESULT_ORDER}`);
+}
 
 if (!DISCORD_TOKEN || !DISCORD_CLIENT_ID || !DISCORD_GUILD_ID) {
   console.error('Missing required env vars: DISCORD_TOKEN, DISCORD_CLIENT_ID, DISCORD_GUILD_ID');
