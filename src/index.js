@@ -9,7 +9,25 @@ const {
 const { buildLibrary } = require('./library');
 const { GuildMusicPlayer } = require('./player');
 
-const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+function normalizeDiscordToken(rawToken) {
+  if (!rawToken) {
+    return rawToken;
+  }
+
+  let token = rawToken.trim();
+
+  if (
+    (token.startsWith('"') && token.endsWith('"')) ||
+    (token.startsWith("'") && token.endsWith("'"))
+  ) {
+    token = token.slice(1, -1).trim();
+  }
+
+  token = token.replace(/^Bot\s+/i, '').trim();
+  return token;
+}
+
+const DISCORD_TOKEN = normalizeDiscordToken(process.env.DISCORD_TOKEN);
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 const DISCORD_GUILD_ID = process.env.DISCORD_GUILD_ID;
 const MUSIC_ROOT = process.env.MUSIC_ROOT || path.join(process.cwd(), 'music');
@@ -72,9 +90,20 @@ const commandDefinitions = [
 
 async function registerCommands() {
   const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
-  await rest.put(Routes.applicationGuildCommands(DISCORD_CLIENT_ID, DISCORD_GUILD_ID), {
-    body: commandDefinitions
-  });
+  try {
+    await rest.put(Routes.applicationGuildCommands(DISCORD_CLIENT_ID, DISCORD_GUILD_ID), {
+      body: commandDefinitions
+    });
+  } catch (error) {
+    if (error?.status === 401) {
+      console.error(
+        'Discord rejected the token while registering commands (401 Unauthorized). ' +
+          'Check DISCORD_TOKEN in your .env; it must be the bot token only (no "Bot " prefix, no quotes).'
+      );
+    }
+
+    throw error;
+  }
 }
 
 function commandHelpText() {
@@ -211,6 +240,11 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 (async () => {
-  await registerCommands();
-  await client.login(DISCORD_TOKEN);
+  try {
+    await registerCommands();
+    await client.login(DISCORD_TOKEN);
+  } catch (error) {
+    console.error('Startup failed:', error);
+    process.exit(1);
+  }
 })();
