@@ -24,7 +24,25 @@ function normalizeDiscordToken(rawToken) {
   }
 
   token = token.replace(/^Bot\s+/i, '').trim();
+
+  if (token.includes(' ')) {
+    token = token.split(/\s+/)[0];
+  }
+
   return token;
+}
+
+function decodeDiscordTokenId(token) {
+  const [encodedId] = token.split('.');
+  if (!encodedId) {
+    return null;
+  }
+
+  try {
+    return Buffer.from(encodedId, 'base64').toString('utf8');
+  } catch {
+    return null;
+  }
 }
 
 const DISCORD_TOKEN = normalizeDiscordToken(process.env.DISCORD_TOKEN);
@@ -34,6 +52,15 @@ const MUSIC_ROOT = process.env.MUSIC_ROOT || path.join(process.cwd(), 'music');
 
 if (!DISCORD_TOKEN || !DISCORD_CLIENT_ID || !DISCORD_GUILD_ID) {
   console.error('Missing required env vars: DISCORD_TOKEN, DISCORD_CLIENT_ID, DISCORD_GUILD_ID');
+  process.exit(1);
+}
+
+const tokenId = decodeDiscordTokenId(DISCORD_TOKEN);
+if (tokenId && tokenId !== DISCORD_CLIENT_ID) {
+  console.error(
+    'DISCORD_TOKEN appears to belong to a different bot/application than DISCORD_CLIENT_ID. ' +
+      'Use a token and client id from the same Discord app.'
+  );
   process.exit(1);
 }
 
@@ -98,7 +125,8 @@ async function registerCommands() {
     if (error?.status === 401) {
       console.error(
         'Discord rejected the token while registering commands (401 Unauthorized). ' +
-          'Check DISCORD_TOKEN in your .env; it must be the bot token only (no "Bot " prefix, no quotes).'
+          'Check DISCORD_TOKEN in your .env; it must be the bot token only (no "Bot " prefix, no quotes), ' +
+          'and ensure DISCORD_CLIENT_ID comes from the same Discord application.'
       );
     }
 
