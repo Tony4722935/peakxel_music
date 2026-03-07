@@ -9,8 +9,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
-RUN npm install --omit=dev \
-    && npm ls libsodium-wrappers --depth=0
+RUN npm install --omit=dev
 
 COPY src ./src
 COPY README.md ./README.md
