@@ -127,30 +127,6 @@ class GuildMusicPlayer {
       this.playNext();
       return;
     }
-    const transcoder = new prism.FFmpeg({
-      args: [
-        '-hide_banner',
-        '-loglevel',
-        'panic',
-        '-i',
-        next.filePath,
-        '-analyzeduration',
-        '0',
-        '-f',
-        'opus',
-        '-ar',
-        '48000',
-        '-ac',
-        '2'
-      ]
-    });
-
-    const resource = createAudioResource(transcoder, {
-      inputType: StreamType.Opus,
-      inlineVolume: true,
-      metadata: next
-    });
-
     if (resource.volume) {
       resource.volume.setVolume(this.volume);
     }
