@@ -6,8 +6,7 @@ const {
   GatewayIntentBits,
   MessageFlags,
   REST,
-  Routes,
-  SlashCommandBuilder
+  Routes
 } = require('discord.js');
 const { buildLibrary } = require('./library');
 const { GuildMusicPlayer, shuffleArray } = require('./player');
@@ -96,38 +95,39 @@ try {
 const playlistChoices = Object.keys(library.playlists).slice(0, 25).map((name) => ({ name, value: name }));
 
 const commandDefinitions = [
-  new SlashCommandBuilder()
-    .setName('play')
-    .setDescription('Play a full playlist')
-    .addStringOption((option) => {
-      const withChoices = option
-        .setName('playlist')
-        .setDescription('Playlist (folder name)')
-        .setRequired(true);
-
-      for (const choice of playlistChoices) {
-        withChoices.addChoices(choice);
+  {
+    name: 'play',
+    description: 'Play a full playlist',
+    options: [
+      {
+        type: 3,
+        name: 'playlist',
+        description: 'Playlist (folder name)',
+        required: true,
+        choices: playlistChoices
       }
-
-      return withChoices;
-    }),
-  new SlashCommandBuilder().setName('skip').setDescription('Skip the current song'),
-  new SlashCommandBuilder().setName('shuffle').setDescription('Shuffle the current queue'),
-  new SlashCommandBuilder()
-    .setName('volume')
-    .setDescription('Set playback volume')
-    .addIntegerOption((option) =>
-      option
-        .setName('level')
-        .setDescription('Volume percentage (0-200)')
-        .setRequired(true)
-        .setMinValue(0)
-        .setMaxValue(200)
-    ),
-  new SlashCommandBuilder().setName('leave').setDescription('Leave the voice channel and clear the queue'),
-  new SlashCommandBuilder().setName('help').setDescription('List available commands'),
-  new SlashCommandBuilder().setName('playlists').setDescription('List all discovered playlists')
-].map((c) => c.toJSON());
+    ]
+  },
+  { name: 'skip', description: 'Skip the current song' },
+  { name: 'shuffle', description: 'Shuffle the current queue' },
+  {
+    name: 'volume',
+    description: 'Set playback volume',
+    options: [
+      {
+        type: 4,
+        name: 'level',
+        description: 'Volume percentage (0-200)',
+        required: true,
+        min_value: 0,
+        max_value: 200
+      }
+    ]
+  },
+  { name: 'leave', description: 'Leave the voice channel and clear the queue' },
+  { name: 'help', description: 'List available commands' },
+  { name: 'playlists', description: 'List all discovered playlists' }
+];
 
 async function registerCommands() {
   const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
