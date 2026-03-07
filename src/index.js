@@ -9,7 +9,7 @@ const {
   SlashCommandBuilder
 } = require('discord.js');
 const { buildLibrary } = require('./library');
-const { GuildMusicPlayer } = require('./player');
+const { GuildMusicPlayer, shuffleArray } = require('./player');
 
 function normalizeDiscordToken(rawToken) {
   if (!rawToken) {
@@ -79,7 +79,7 @@ const playlistChoices = Object.keys(library.playlists).slice(0, 25).map((name) =
 const commandDefinitions = [
   new SlashCommandBuilder()
     .setName('play')
-    .setDescription('Play a full playlist or a single track from a playlist')
+    .setDescription('Play a full playlist')
     .addStringOption((option) => {
       const withChoices = option
         .setName('playlist')
@@ -91,13 +91,7 @@ const commandDefinitions = [
       }
 
       return withChoices;
-    })
-    .addStringOption((option) =>
-      option
-        .setName('track')
-        .setDescription('Optional track name. If omitted, the full playlist is queued.')
-        .setRequired(false)
-    ),
+    }),
   new SlashCommandBuilder().setName('skip').setDescription('Skip the current song'),
   new SlashCommandBuilder().setName('shuffle').setDescription('Shuffle the current queue'),
   new SlashCommandBuilder()
@@ -113,7 +107,6 @@ const commandDefinitions = [
     ),
   new SlashCommandBuilder().setName('leave').setDescription('Leave the voice channel and clear the queue'),
   new SlashCommandBuilder().setName('help').setDescription('List available commands'),
-  new SlashCommandBuilder().setName('functions').setDescription('Alias for /help'),
   new SlashCommandBuilder().setName('playlists').setDescription('List all discovered playlists')
 ].map((c) => c.toJSON());
 
@@ -139,13 +132,13 @@ async function registerCommands() {
 function commandHelpText() {
   return [
     'Available slash commands:',
-    '- /play playlist:<name> [track:<track name>] — queue songs from your cached library',
+    '- /play playlist:<name> — queue songs from your cached library in a new random order each time',
     '- /skip — skip current track',
     '- /shuffle — shuffle queued tracks',
     '- /volume level:<0-200> — set volume',
     '- /leave — disconnect and clear queue',
     '- /playlists — show playlist folders found on startup',
-    '- /help or /functions — show this help'
+    '- /help — show this help'
   ].join('\n');
 }
 
@@ -245,7 +238,6 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       const playlistName = interaction.options.getString('playlist', true);
-      const trackName = interaction.options.getString('track');
       const playlist = library.playlists[playlistName];
 
       if (!playlist || playlist.length === 0) {
@@ -262,20 +254,9 @@ client.on('interactionCreate', async (interaction) => {
 
       await player.connectToVoiceChannel(voiceChannel);
 
-      if (trackName) {
-        const chosenTrack = playlist.find((track) => track.name.toLowerCase() === trackName.toLowerCase());
-        if (!chosenTrack) {
-          await replySafely(interaction, ephemeralMessage(`Track "${trackName}" not found in playlist "${playlistName}".`));
-          return;
-        }
-
-        player.enqueueTracks([chosenTrack]);
-        await replySafely(interaction, `Queued **${chosenTrack.name}** from **${playlistName}**.`);
-        return;
-      }
-
-      player.enqueueTracks(playlist);
-      await replySafely(interaction, `Queued ${playlist.length} tracks from **${playlistName}**.`);
+      const shuffledPlaylist = shuffleArray(playlist);
+      player.enqueueTracks(shuffledPlaylist);
+      await replySafely(interaction, `Queued ${playlist.length} tracks from **${playlistName}** in shuffled order.`);
       return;
     }
 
@@ -319,7 +300,7 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    if (interaction.commandName === 'help' || interaction.commandName === 'functions') {
+    if (interaction.commandName === 'help') {
       await interaction.reply(commandHelpText());
       return;
     }
