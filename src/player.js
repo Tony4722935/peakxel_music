@@ -9,7 +9,12 @@ const {
   getVoiceConnection,
   joinVoiceChannel
 } = require('@discordjs/voice');
+const ffmpegStatic = require('ffmpeg-static');
 const prism = require('prism-media');
+
+if (ffmpegStatic) {
+  process.env.FFMPEG_PATH = ffmpegStatic;
+}
 
 const VOICE_READY_TIMEOUT_MS = 60_000;
 const VOICE_CONNECT_MAX_ATTEMPTS = 3;
