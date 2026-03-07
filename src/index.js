@@ -2,6 +2,7 @@ const path = require('path');
 const {
   Client,
   GatewayIntentBits,
+  MessageFlags,
   REST,
   Routes,
   SlashCommandBuilder
@@ -156,9 +157,38 @@ function getGuildPlayer(guildId) {
   return guildPlayers.get(guildId);
 }
 
+function isUnknownInteractionError(error) {
+  return error?.code === 10062;
+}
+
+async function replySafely(interaction, payload) {
+  try {
+    if (interaction.deferred || interaction.replied) {
+      await interaction.followUp(payload);
+      return;
+    }
+
+    await interaction.reply(payload);
+  } catch (error) {
+    if (isUnknownInteractionError(error)) {
+      console.warn('Skipped interaction response because the interaction already expired.');
+      return;
+    }
+
+    throw error;
+  }
+}
+
+function ephemeralMessage(content) {
+  return {
+    content,
+    flags: MessageFlags.Ephemeral
+  };
+}
+
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
 
-client.once('ready', () => {
+client.once('clientReady', () => {
   console.log(`Logged in as ${client.user.tag}`);
   console.log(`Music library loaded from ${library.musicRoot} at ${library.generatedAt}`);
   console.log(`Discovered playlists: ${Object.keys(library.playlists).join(', ') || '(none)'}`);
@@ -175,7 +205,7 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.commandName === 'play') {
       const voiceChannel = interaction.member.voice.channel;
       if (!voiceChannel) {
-        await interaction.reply({ content: 'Join a voice channel first.', ephemeral: true });
+        await replySafely(interaction, ephemeralMessage('Join a voice channel first.'));
         return;
       }
 
@@ -184,7 +214,10 @@ client.on('interactionCreate', async (interaction) => {
       const playlist = library.playlists[playlistName];
 
       if (!playlist || playlist.length === 0) {
-        await interaction.reply({ content: `Playlist "${playlistName}" not found in cache. Restart the app after updating folders.`, ephemeral: true });
+        await replySafely(
+          interaction,
+          ephemeralMessage(`Playlist "${playlistName}" not found in cache. Restart the app after updating folders.`)
+        );
         return;
       }
 
@@ -193,10 +226,7 @@ client.on('interactionCreate', async (interaction) => {
       if (trackName) {
         const chosenTrack = playlist.find((track) => track.name.toLowerCase() === trackName.toLowerCase());
         if (!chosenTrack) {
-          await interaction.reply({
-            content: `Track "${trackName}" not found in playlist "${playlistName}".`,
-            ephemeral: true
-          });
+          await replySafely(interaction, ephemeralMessage(`Track "${trackName}" not found in playlist "${playlistName}".`));
           return;
         }
 
@@ -255,16 +285,15 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    await interaction.reply({ content: 'Unknown command.', ephemeral: true });
+    await replySafely(interaction, ephemeralMessage('Unknown command.'));
   } catch (error) {
     console.error('Command handling error:', error);
-    if (interaction.deferred || interaction.replied) {
-      await interaction.followUp({ content: 'An error occurred while handling your command.', ephemeral: true });
-      return;
-    }
-
-    await interaction.reply({ content: 'An error occurred while handling your command.', ephemeral: true });
+    await replySafely(interaction, ephemeralMessage('An error occurred while handling your command.'));
   }
+});
+
+client.on('error', (error) => {
+  console.error('Discord client error:', error);
 });
 
 (async () => {
