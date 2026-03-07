@@ -10,5 +10,6 @@ services:
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:?set DISCORD_CLIENT_ID in .env}
       DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:?set DISCORD_GUILD_ID in .env}
       MUSIC_ROOT: /music
+      DISCORD_DNS_RESULT_ORDER: ${DISCORD_DNS_RESULT_ORDER:-ipv4first}
     volumes:
       - ${MUSIC_LIBRARY_PATH:?set MUSIC_LIBRARY_PATH in .env}:/music:ro

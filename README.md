@@ -30,6 +30,7 @@ music/
    - `DISCORD_CLIENT_ID`
    - `DISCORD_GUILD_ID` (your local test server/guild id)
    - `MUSIC_ROOT` (optional, defaults to `./music`)
+  - `DISCORD_DNS_RESULT_ORDER` (optional, defaults to `ipv4first` to avoid IPv6 voice handshake issues in some Docker hosts)
 
 Example `.env`:
 
@@ -57,6 +58,7 @@ npm start
    - `DISCORD_CLIENT_ID`
    - `DISCORD_GUILD_ID`
    - `MUSIC_LIBRARY_PATH` (absolute host path containing playlist folders)
+   - `DISCORD_DNS_RESULT_ORDER` (optional, defaults to `ipv4first`)
 3. Start the bot:
    ```bash
    docker compose up -d --build
@@ -84,3 +86,9 @@ The Docker image installs `ffmpeg` (required by the playback pipeline). Playback
 
 - The library cache is generated once at startup.
 - If you add/remove files, restart the bot to refresh cache.
+
+## Voice connection troubleshooting
+
+- The bot now prints detailed voice lifecycle logs (connection state changes, ready attempts, and queue/playback events) to help diagnose Docker/network issues.
+- If voice connect repeatedly times out in Docker, keep `DISCORD_DNS_RESULT_ORDER=ipv4first` (default) to prevent IPv6-first DNS resolution from breaking the Discord voice handshake on hosts without working IPv6 routing.
+- After changing env vars, recreate the container: `docker compose up -d --build --force-recreate`.

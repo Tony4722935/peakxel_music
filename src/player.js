@@ -16,8 +16,8 @@ if (ffmpegStatic) {
   process.env.FFMPEG_PATH = ffmpegStatic;
 }
 
-const VOICE_READY_TIMEOUT_MS = 60_000;
-const VOICE_CONNECT_MAX_ATTEMPTS = 3;
+const VOICE_READY_TIMEOUT_MS = 20_000;
+const VOICE_CONNECT_MAX_ATTEMPTS = 5;
 
 function ensureFfmpegAvailable() {
   try {
@@ -85,6 +85,7 @@ class GuildMusicPlayer {
     this.connection = null;
 
     this.player.on(AudioPlayerStatus.Idle, () => {
+      console.log('[Player] Audio player became idle, advancing queue.');
       this.playNext();
     });
 
@@ -96,6 +97,10 @@ class GuildMusicPlayer {
 
   async connectToVoiceChannel(voiceChannel) {
     const guildId = voiceChannel.guild.id;
+    console.log(
+      `[Voice][${guildId}] connect requested: channel=${voiceChannel.id} name="${voiceChannel.name}" bitrate=${voiceChannel.bitrate}`
+    );
+
     const existing = getVoiceConnection(guildId);
 
     if (existing) {
@@ -105,9 +110,13 @@ class GuildMusicPlayer {
           channelId: voiceChannel.id,
           selfDeaf: true
         });
+        console.log(`[Voice][${guildId}] rejoin requested for channel=${voiceChannel.id}`);
       }
 
       this.connection = existing;
+      console.log(
+        `[Voice][${guildId}] reusing existing connection status=${existing.state.status} targetChannel=${existing.joinConfig.channelId}`
+      );
     } else {
       this.connection = joinVoiceChannel({
         channelId: voiceChannel.id,
@@ -115,12 +124,20 @@ class GuildMusicPlayer {
         adapterCreator: voiceChannel.guild.voiceAdapterCreator,
         selfDeaf: true
       });
+      console.log(`[Voice][${guildId}] created new connection status=${this.connection.state.status}`);
     }
+
+    this.connection.on('stateChange', (oldState, newState) => {
+      console.log(`[Voice][${guildId}] connection state: ${oldState.status} -> ${newState.status}`);
+    });
 
     try {
       await this.waitUntilReady(voiceChannel.id);
       this.connection.subscribe(this.player);
+      console.log(`[Voice][${guildId}] connection ready and audio player subscribed.`);
     } catch (error) {
+      console.error(`[Voice][${guildId}] failed to connect in time:`, error);
+
       const connectionToDestroy = this.connection || getVoiceConnection(guildId);
       if (connectionToDestroy) {
         connectionToDestroy.destroy();
@@ -135,9 +152,13 @@ class GuildMusicPlayer {
   }
 
   async waitUntilReady(channelId) {
+    const guildId = this.connection?.joinConfig?.guildId || 'unknown';
     let lastError = null;
 
     for (let attempt = 1; attempt <= VOICE_CONNECT_MAX_ATTEMPTS; attempt += 1) {
+      console.log(
+        `[Voice][${guildId}] waitUntilReady attempt ${attempt}/${VOICE_CONNECT_MAX_ATTEMPTS} (status=${this.connection?.state?.status || 'missing'})`
+      );
       try {
         if (!this.connection) {
           throw new Error('Voice connection was not established.');
@@ -146,9 +167,12 @@ class GuildMusicPlayer {
         if (this.connection.state.status !== VoiceConnectionStatus.Ready) {
           await entersState(this.connection, VoiceConnectionStatus.Ready, VOICE_READY_TIMEOUT_MS);
         }
+
+        console.log(`[Voice][${guildId}] reached Ready state.`);
         return;
       } catch (error) {
         lastError = error;
+        console.warn(`[Voice][${guildId}] ready wait failed on attempt ${attempt}:`, error?.message || error);
 
         if (attempt === VOICE_CONNECT_MAX_ATTEMPTS) {
           break;
@@ -158,14 +182,18 @@ class GuildMusicPlayer {
           channelId,
           selfDeaf: true
         });
+        console.log(`[Voice][${guildId}] rejoin requested for channel=${channelId}`);
       }
     }
 
+    console.error(`[Voice][${guildId}] exhausted all connection attempts.`);
     throw lastError;
   }
 
   enqueueTracks(tracks) {
     this.queue.push(...tracks);
+    console.log(`[Player] Enqueued ${tracks.length} track(s). Queue length is now ${this.queue.length}.`);
+
     if (!this.current) {
       this.playNext();
     }
@@ -176,8 +204,11 @@ class GuildMusicPlayer {
     this.current = next || null;
 
     if (!next) {
+      console.log('[Player] Queue empty, nothing to play.');
       return;
     }
+
+    console.log(`[Player] Starting track: ${next.name} (${next.filePath})`);
 
     let resource;
     try {
@@ -187,21 +218,27 @@ class GuildMusicPlayer {
       this.playNext();
       return;
     }
+
     this.player.play(resource);
+    console.log('[Player] Audio resource submitted to Discord audio player.');
   }
 
   skip() {
+    console.log('[Player] Skip requested.');
     this.player.stop();
   }
 
   shuffleQueue() {
     this.queue = shuffleArray(this.queue);
+    console.log('[Player] Queue shuffled.');
   }
 
   setVolume(percent) {
     this.volume = Math.max(0, Math.min(percent, 200)) / 100;
 
-    return Math.round(this.volume * 100);
+    const rounded = Math.round(this.volume * 100);
+    console.log(`[Player] Volume updated to ${rounded}%.`);
+    return rounded;
   }
 
   leave() {
@@ -210,6 +247,7 @@ class GuildMusicPlayer {
       this.connection = null;
     }
 
+    console.log('[Player] Leaving voice channel and clearing queue.');
     this.player.stop();
     this.queue = [];
     this.current = null;
