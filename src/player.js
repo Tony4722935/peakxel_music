@@ -37,10 +37,27 @@ function ensureFfmpegAvailable() {
 
 
 function ensureVoiceEncryptionDependency() {
+  const encryptionPackages = [
+    'tweetnacl',
+    'libsodium-wrappers',
+    'sodium',
+    'sodium-native',
+    '@noble/ciphers',
+    '@stablelib/xchacha20poly1305'
+  ];
+  const hasInstalledEncryptionLibrary = encryptionPackages.some((packageName) => {
+    try {
+      require.resolve(packageName);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
   const report = generateDependencyReport();
-  const hasEncryptionLibrary = /@(stablelib\/xchacha20poly1305|noble\/ciphers|sodium-native|sodium|libsodium-wrappers|tweetnacl)\s+\d/.test(
-    report
-  );
+  const hasEncryptionLibrary =
+    hasInstalledEncryptionLibrary ||
+    /(@stablelib\/xchacha20poly1305|@noble\/ciphers|sodium-native|sodium|libsodium-wrappers|tweetnacl)\b/i.test(report);
 
   if (!hasEncryptionLibrary) {
     throw new Error(
