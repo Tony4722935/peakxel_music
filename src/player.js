@@ -6,6 +6,7 @@ const {
   createAudioPlayer,
   createAudioResource,
   entersState,
+  generateDependencyReport,
   getVoiceConnection,
   joinVoiceChannel
 } = require('@discordjs/voice');
@@ -32,6 +33,23 @@ function ensureFfmpegAvailable() {
       'FFmpeg is required for playback but was not found. Install ffmpeg in the runtime environment (Docker image should include it).'
     );
   }
+}
+
+
+function ensureVoiceEncryptionDependency() {
+  const report = generateDependencyReport();
+  const hasEncryptionLibrary = /@(stablelib\/xchacha20poly1305|noble\/ciphers|sodium-native|sodium|libsodium-wrappers|tweetnacl)\s+\d/.test(
+    report
+  );
+
+  if (!hasEncryptionLibrary) {
+    throw new Error(
+      'Discord voice encryption dependency missing. Install one of: tweetnacl, libsodium-wrappers, sodium, sodium-native, @noble/ciphers, @stablelib/xchacha20poly1305.'
+    );
+  }
+
+  console.log(`[Voice] Dependency report:
+${report}`);
 }
 
 function createTrackResource(track, volume = 1) {
@@ -73,6 +91,7 @@ function shuffleArray(items) {
 class GuildMusicPlayer {
   constructor() {
     ensureFfmpegAvailable();
+    ensureVoiceEncryptionDependency();
 
     this.player = createAudioPlayer({
       behaviors: {
@@ -112,7 +131,8 @@ class GuildMusicPlayer {
       if (shouldRejoin) {
         existing.rejoin({
           channelId: voiceChannel.id,
-          selfDeaf: true
+          selfDeaf: true,
+          selfMute: false
         });
         console.log(`[Voice][${guildId}] rejoin requested for channel=${voiceChannel.id}`);
       }
@@ -126,7 +146,8 @@ class GuildMusicPlayer {
         channelId: voiceChannel.id,
         guildId,
         adapterCreator: voiceChannel.guild.voiceAdapterCreator,
-        selfDeaf: true
+        selfDeaf: true,
+        selfMute: false
       });
       console.log(`[Voice][${guildId}] created new connection status=${this.connection.state.status}`);
     }
@@ -197,7 +218,8 @@ class GuildMusicPlayer {
             channelId: this.lastVoiceChannel.id,
             guildId: this.lastVoiceChannel.guild.id,
             adapterCreator: this.lastVoiceChannel.guild.voiceAdapterCreator,
-            selfDeaf: true
+            selfDeaf: true,
+            selfMute: false
           });
           this.attachConnectionListeners(guildId);
 
@@ -207,7 +229,8 @@ class GuildMusicPlayer {
 
         this.connection.rejoin({
           channelId,
-          selfDeaf: true
+          selfDeaf: true,
+          selfMute: false
         });
         console.log(`[Voice][${guildId}] rejoin requested for channel=${channelId}`);
       }

@@ -26,9 +26,9 @@ music/
    ```
 2. Create a Discord application + bot and invite it to your server with bot + applications.commands scopes.
 3. Configure environment values (the app automatically loads them from a local `.env` file if present):
-   - `DISCORD_TOKEN`
-   - `DISCORD_CLIENT_ID`
-   - `DISCORD_GUILD_ID` (your local test server/guild id)
+   - `DISCORD_TOKEN` (or `TOKEN`)
+   - `DISCORD_CLIENT_ID` (or `APPLICATION_ID`)
+   - `DISCORD_GUILD_ID` (or `DEV_GUILD`)
    - `MUSIC_ROOT` (optional, defaults to `./music`)
   - `DISCORD_DNS_RESULT_ORDER` (optional, defaults to `ipv4first` to avoid IPv6 voice handshake issues in some Docker hosts)
 
@@ -36,8 +36,11 @@ Example `.env`:
 
 ```dotenv
 DISCORD_TOKEN=...
+# TOKEN=...
 DISCORD_CLIENT_ID=...
+# APPLICATION_ID=...
 DISCORD_GUILD_ID=...
+# DEV_GUILD=...
 MUSIC_ROOT=/path/to/your/music
 ```
 
@@ -54,9 +57,9 @@ npm start
    cp .env.example .env
    ```
 2. Update `.env` values:
-   - `DISCORD_TOKEN`
-   - `DISCORD_CLIENT_ID`
-   - `DISCORD_GUILD_ID`
+   - `DISCORD_TOKEN` (or `TOKEN`)
+   - `DISCORD_CLIENT_ID` (or `APPLICATION_ID`)
+   - `DISCORD_GUILD_ID` (or `DEV_GUILD`)
    - `MUSIC_LIBRARY_PATH` (absolute host path containing playlist folders)
    - `DISCORD_DNS_RESULT_ORDER` (optional, defaults to `ipv4first`)
 3. Start the bot:
@@ -91,4 +94,5 @@ The Docker image installs `ffmpeg` (required by the playback pipeline). Playback
 
 - The bot now prints detailed voice lifecycle logs (connection state changes, ready attempts, and queue/playback events) to help diagnose Docker/network issues.
 - If voice connect repeatedly times out in Docker, keep `DISCORD_DNS_RESULT_ORDER=ipv4first` (default) to prevent IPv6-first DNS resolution from breaking the Discord voice handshake on hosts without working IPv6 routing.
+- This project now includes `tweetnacl` for Discord voice encryption and logs the `@discordjs/voice` dependency report at startup; if encryption dependencies are missing/misdetected you will now see a clear startup error.
 - After changing env vars, recreate the container: `docker compose up -d --build --force-recreate`.

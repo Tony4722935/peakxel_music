@@ -48,9 +48,21 @@ function decodeDiscordTokenId(token) {
   }
 }
 
-const DISCORD_TOKEN = normalizeDiscordToken(process.env.DISCORD_TOKEN);
-const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID;
-const DISCORD_GUILD_ID = process.env.DISCORD_GUILD_ID;
+
+function firstNonEmptyEnv(...keys) {
+  for (const key of keys) {
+    const value = process.env[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return undefined;
+}
+
+const DISCORD_TOKEN = normalizeDiscordToken(firstNonEmptyEnv('DISCORD_TOKEN', 'TOKEN'));
+const DISCORD_CLIENT_ID = firstNonEmptyEnv('DISCORD_CLIENT_ID', 'APPLICATION_ID');
+const DISCORD_GUILD_ID = firstNonEmptyEnv('DISCORD_GUILD_ID', 'DEV_GUILD');
 const MUSIC_ROOT = process.env.MUSIC_ROOT || path.join(process.cwd(), 'music');
 const DISCORD_DNS_RESULT_ORDER = process.env.DISCORD_DNS_RESULT_ORDER || 'ipv4first';
 
@@ -60,7 +72,7 @@ if (typeof dns.setDefaultResultOrder === 'function') {
 }
 
 if (!DISCORD_TOKEN || !DISCORD_CLIENT_ID || !DISCORD_GUILD_ID) {
-  console.error('Missing required env vars: DISCORD_TOKEN, DISCORD_CLIENT_ID, DISCORD_GUILD_ID');
+  console.error('Missing required env vars: DISCORD_TOKEN/TOKEN, DISCORD_CLIENT_ID/APPLICATION_ID, DISCORD_GUILD_ID/DEV_GUILD');
   process.exit(1);
 }
 
