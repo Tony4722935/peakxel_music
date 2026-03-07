@@ -166,8 +166,29 @@ function isUnknownMessageError(error) {
   return error?.code === 10008;
 }
 
+function isAlreadyAcknowledgedError(error) {
+  return error?.code === 40060;
+}
+
 function isVoiceConnectTimeoutError(error) {
   return error?.code === 'VOICE_CONNECT_TIMEOUT';
+}
+
+async function deferReplySafely(interaction) {
+  if (interaction.deferred || interaction.replied) {
+    return;
+  }
+
+  try {
+    await interaction.deferReply();
+  } catch (error) {
+    if (isAlreadyAcknowledgedError(error) || isUnknownInteractionError(error)) {
+      console.warn('Skipped deferReply because the interaction was already acknowledged.');
+      return;
+    }
+
+    throw error;
+  }
 }
 
 async function replySafely(interaction, payload) {
@@ -184,7 +205,7 @@ async function replySafely(interaction, payload) {
 
     await interaction.reply(payload);
   } catch (error) {
-    if (isUnknownInteractionError(error) || isUnknownMessageError(error)) {
+    if (isUnknownInteractionError(error) || isUnknownMessageError(error) || isAlreadyAcknowledgedError(error)) {
       console.warn('Skipped interaction response because the interaction response message is no longer available.');
       return;
     }
@@ -236,7 +257,7 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       if (!interaction.deferred && !interaction.replied) {
-        await interaction.deferReply();
+        await deferReplySafely(interaction);
       }
 
       await player.connectToVoiceChannel(voiceChannel);
