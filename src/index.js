@@ -161,6 +161,10 @@ function isUnknownInteractionError(error) {
   return error?.code === 10062;
 }
 
+function isUnknownMessageError(error) {
+  return error?.code === 10008;
+}
+
 function isVoiceConnectTimeoutError(error) {
   return error?.code === 'VOICE_CONNECT_TIMEOUT';
 }
@@ -179,8 +183,8 @@ async function replySafely(interaction, payload) {
 
     await interaction.reply(payload);
   } catch (error) {
-    if (isUnknownInteractionError(error)) {
-      console.warn('Skipped interaction response because the interaction already expired.');
+    if (isUnknownInteractionError(error) || isUnknownMessageError(error)) {
+      console.warn('Skipped interaction response because the interaction response message is no longer available.');
       return;
     }
 

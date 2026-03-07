@@ -116,7 +116,10 @@ class GuildMusicPlayer {
       await this.waitUntilReady(voiceChannel.id);
       this.connection.subscribe(this.player);
     } catch (error) {
-      this.connection.destroy();
+      const connectionToDestroy = this.connection || getVoiceConnection(guildId);
+      if (connectionToDestroy) {
+        connectionToDestroy.destroy();
+      }
       this.connection = null;
 
       const wrappedError = new Error('Timed out while connecting to the voice channel.');
@@ -131,6 +134,10 @@ class GuildMusicPlayer {
 
     for (let attempt = 1; attempt <= VOICE_CONNECT_MAX_ATTEMPTS; attempt += 1) {
       try {
+        if (!this.connection) {
+          throw new Error('Voice connection was not established.');
+        }
+
         if (this.connection.state.status !== VoiceConnectionStatus.Ready) {
           await entersState(this.connection, VoiceConnectionStatus.Ready, VOICE_READY_TIMEOUT_MS);
         }
