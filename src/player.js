@@ -101,8 +101,18 @@ class GuildMusicPlayer {
       selfDeaf: false
     });
 
-    await entersState(this.connection, VoiceConnectionStatus.Ready, 20_000);
-    this.connection.subscribe(this.player);
+    try {
+      await entersState(this.connection, VoiceConnectionStatus.Ready, 20_000);
+      this.connection.subscribe(this.player);
+    } catch (error) {
+      this.connection.destroy();
+      this.connection = null;
+
+      const wrappedError = new Error('Timed out while connecting to the voice channel.');
+      wrappedError.code = 'VOICE_CONNECT_TIMEOUT';
+      wrappedError.cause = error;
+      throw wrappedError;
+    }
   }
 
   enqueueTracks(tracks) {

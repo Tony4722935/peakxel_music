@@ -161,6 +161,10 @@ function isUnknownInteractionError(error) {
   return error?.code === 10062;
 }
 
+function isVoiceConnectTimeoutError(error) {
+  return error?.code === 'VOICE_CONNECT_TIMEOUT';
+}
+
 async function replySafely(interaction, payload) {
   try {
     if (interaction.deferred || interaction.replied) {
@@ -287,6 +291,12 @@ client.on('interactionCreate', async (interaction) => {
 
     await replySafely(interaction, ephemeralMessage('Unknown command.'));
   } catch (error) {
+    if (isVoiceConnectTimeoutError(error)) {
+      console.warn('Voice connection timed out before becoming ready.');
+      await replySafely(interaction, ephemeralMessage('Could not connect to the voice channel in time. Please try again.'));
+      return;
+    }
+
     console.error('Command handling error:', error);
     await replySafely(interaction, ephemeralMessage('An error occurred while handling your command.'));
   }
