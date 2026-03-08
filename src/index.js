@@ -48,6 +48,33 @@ function decodeDiscordTokenId(token) {
 }
 
 
+function isNodeVersionAtLeast(requiredMajor, requiredMinor, requiredPatch = 0) {
+  const [major, minor, patch] = process.versions.node.split('.').map((value) => Number.parseInt(value, 10));
+
+  if (major !== requiredMajor) {
+    return major > requiredMajor;
+  }
+
+  if (minor !== requiredMinor) {
+    return minor > requiredMinor;
+  }
+
+  return patch >= requiredPatch;
+}
+
+function enforceNodeVersion() {
+  const required = '22.12.0';
+  if (isNodeVersionAtLeast(22, 12, 0)) {
+    return;
+  }
+
+  console.error(
+    `Node.js ${required}+ is required for Discord voice DAVE support. Current runtime: ${process.versions.node}.`
+  );
+  console.error('Please upgrade Node.js, reinstall dependencies, and start the bot again.');
+  process.exit(1);
+}
+
 function firstNonEmptyEnv(...keys) {
   for (const key of keys) {
     const value = process.env[key];
@@ -58,6 +85,8 @@ function firstNonEmptyEnv(...keys) {
 
   return undefined;
 }
+
+enforceNodeVersion();
 
 const DISCORD_TOKEN = normalizeDiscordToken(firstNonEmptyEnv('DISCORD_TOKEN', 'TOKEN'));
 const DISCORD_CLIENT_ID = firstNonEmptyEnv('DISCORD_CLIENT_ID', 'APPLICATION_ID');
@@ -151,13 +180,13 @@ async function registerCommands() {
 function commandHelpText() {
   return [
     'Available slash commands:',
-    '- /play playlist:<name> — queue songs from your cached library in a new random order each time',
-    '- /skip — skip current track',
-    '- /shuffle — shuffle queued tracks',
-    '- /volume level:<0-200> — set volume',
-    '- /leave — disconnect and clear queue',
-    '- /playlists — show playlist folders found on startup',
-    '- /help — show this help'
+    '- /play playlist:<name> - queue songs from your cached library in a new random order each time',
+    '- /skip - skip current track',
+    '- /shuffle - shuffle queued tracks',
+    '- /volume level:<0-200> - set volume',
+    '- /leave - disconnect and clear queue',
+    '- /playlists - show playlist folders found on startup',
+    '- /help - show this help'
   ].join('\n');
 }
 

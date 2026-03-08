@@ -11,7 +11,6 @@ const {
   joinVoiceChannel
 } = require('@discordjs/voice');
 const ffmpegStatic = require('ffmpeg-static');
-const crypto = require('node:crypto');
 const prism = require('prism-media');
 
 if (ffmpegStatic) {
@@ -19,9 +18,10 @@ if (ffmpegStatic) {
 }
 
 const VOICE_READY_TIMEOUT_MS = 20_000;
-const VOICE_CONNECT_MAX_ATTEMPTS = 5;
+const VOICE_CONNECT_MAX_ATTEMPTS = 3;
 const VOICE_RECONNECT_GRACE_MS = 5_000;
 const VOICE_READY_RETRY_BACKOFF_MS = 1_500;
+const VOICE_DEBUG_ENABLED = String(process.env.VOICE_DEBUG || '').toLowerCase() === 'true';
 
 function ensureFfmpegAvailable() {
   try {
@@ -46,7 +46,8 @@ function ensureVoiceEncryptionDependency() {
     '@noble/ciphers',
     '@stablelib/xchacha20poly1305'
   ];
-  const hasInstalledEncryptionLibrary = encryptionPackages.some((packageName) => {
+
+  const installedEncryptionLibrary = encryptionPackages.find((packageName) => {
     try {
       require.resolve(packageName);
       return true;
@@ -55,19 +56,25 @@ function ensureVoiceEncryptionDependency() {
     }
   });
 
-  const hasNativeAes256Gcm = crypto.getCiphers().includes('aes-256-gcm');
-
   const report = generateDependencyReport();
-  const hasEncryptionLibrary = hasInstalledEncryptionLibrary || hasNativeAes256Gcm;
 
-  if (!hasEncryptionLibrary) {
+  if (!installedEncryptionLibrary) {
     throw new Error(
-      'Discord voice encryption dependency missing. Install one of: libsodium-wrappers, sodium, sodium-native, @noble/ciphers, @stablelib/xchacha20poly1305, or use a Node.js runtime with AES-256-GCM support.'
+      'Discord voice encryption dependency missing. Install one of: libsodium-wrappers, sodium, sodium-native, @noble/ciphers, @stablelib/xchacha20poly1305.'
     );
   }
 
+  console.log(`[Voice] Using encryption dependency: ${installedEncryptionLibrary}`);
   console.log(`[Voice] Dependency report:
 ${report}`);
+}
+
+function ensureDaveLibraryAvailable() {
+  try {
+    require.resolve('@snazzah/davey');
+  } catch {
+    throw new Error('Discord DAVE dependency missing. Install @snazzah/davey to support voice connect on current Discord voice servers.');
+  }
 }
 
 function createTrackResource(track, volume = 1) {
@@ -75,24 +82,31 @@ function createTrackResource(track, volume = 1) {
     args: [
       '-hide_banner',
       '-loglevel',
-      'panic',
+      'error',
       '-i',
       track.filePath,
+      '-map',
+      '0:a:0',
       '-analyzeduration',
       '0',
+      '-vn',
+      '-sn',
+      '-dn',
       '-af',
-      `volume=${volume}`,
-      '-f',
-      'opus',
+      'volume=' + volume,
+      '-c:a',
+      'libopus',
       '-ar',
       '48000',
       '-ac',
-      '2'
+      '2',
+      '-f',
+      'opus'
     ]
   });
 
   return createAudioResource(transcoder, {
-    inputType: StreamType.Opus,
+    inputType: StreamType.OggOpus,
     metadata: track
   });
 }
@@ -110,6 +124,7 @@ class GuildMusicPlayer {
   constructor() {
     ensureFfmpegAvailable();
     ensureVoiceEncryptionDependency();
+    ensureDaveLibraryAvailable();
 
     this.player = createAudioPlayer({
       behaviors: {
@@ -122,7 +137,11 @@ class GuildMusicPlayer {
     this.volume = 1;
     this.connection = null;
     this.connectionListenerCleanup = null;
-    this.lastVoiceChannel = null;
+
+    this.player.on(AudioPlayerStatus.Playing, () => {
+      const currentName = this.current?.name || '(unknown)';
+      console.log(`[Player] Audio player is playing: ${currentName}`);
+    });
 
     this.player.on(AudioPlayerStatus.Idle, () => {
       console.log('[Player] Audio player became idle, advancing queue.');
@@ -137,7 +156,6 @@ class GuildMusicPlayer {
 
   async connectToVoiceChannel(voiceChannel) {
     const guildId = voiceChannel.guild.id;
-    this.lastVoiceChannel = voiceChannel;
     console.log(
       `[Voice][${guildId}] connect requested: channel=${voiceChannel.id} name="${voiceChannel.name}" bitrate=${voiceChannel.bitrate}`
     );
@@ -165,7 +183,8 @@ class GuildMusicPlayer {
         guildId,
         adapterCreator: voiceChannel.guild.voiceAdapterCreator,
         selfDeaf: true,
-        selfMute: false
+        selfMute: false,
+        debug: VOICE_DEBUG_ENABLED
       });
       console.log(`[Voice][${guildId}] created new connection status=${this.connection.state.status}`);
     }
@@ -173,7 +192,7 @@ class GuildMusicPlayer {
     this.attachConnectionListeners(guildId);
 
     try {
-      await this.waitUntilReady(voiceChannel.id);
+      await this.waitUntilReady(voiceChannel);
       this.connection.subscribe(this.player);
       console.log(`[Voice][${guildId}] connection ready and audio player subscribed.`);
     } catch (error) {
@@ -192,9 +211,11 @@ class GuildMusicPlayer {
     }
   }
 
-  async waitUntilReady(channelId) {
-    const guildId = this.connection?.joinConfig?.guildId || 'unknown';
+  async waitUntilReady(voiceChannel) {
+    const channelId = voiceChannel.id;
+    const guildId = voiceChannel.guild.id;
     let lastError = null;
+    let rebuiltConnection = false;
 
     for (let attempt = 1; attempt <= VOICE_CONNECT_MAX_ATTEMPTS; attempt += 1) {
       console.log(
@@ -217,37 +238,35 @@ class GuildMusicPlayer {
           break;
         }
 
-        const status = this.connection.state.status;
-
         this.connection.rejoin({
           channelId,
           selfDeaf: true,
           selfMute: false
         });
-        console.log(`[Voice][${guildId}] rejoin requested for channel=${channelId} after ${status} state.`);
+        console.log(`[Voice][${guildId}] rejoin requested for channel=${channelId}.`);
 
         await new Promise((resolve) => {
           setTimeout(resolve, VOICE_READY_RETRY_BACKOFF_MS);
         });
 
-        if (this.connection.state.status === VoiceConnectionStatus.Signalling && this.lastVoiceChannel) {
-          console.warn(
-            `[Voice][${guildId}] still signalling after rejoin; rebuilding connection for channel=${channelId}`
-          );
+        if (!rebuiltConnection && this.connection?.state?.status === VoiceConnectionStatus.Signalling) {
+          rebuiltConnection = true;
+          console.warn(`[Voice][${guildId}] still signalling after rejoin; rebuilding connection once.`);
 
           this.detachConnectionListeners();
           this.connection.destroy();
 
           this.connection = joinVoiceChannel({
-            channelId: this.lastVoiceChannel.id,
-            guildId: this.lastVoiceChannel.guild.id,
-            adapterCreator: this.lastVoiceChannel.guild.voiceAdapterCreator,
+            channelId,
+            guildId,
+            adapterCreator: voiceChannel.guild.voiceAdapterCreator,
             selfDeaf: true,
-            selfMute: false
+            selfMute: false,
+            debug: VOICE_DEBUG_ENABLED
           });
-          this.attachConnectionListeners(guildId);
 
-          console.log(`[Voice][${guildId}] created replacement connection status=${this.connection.state.status}`);
+          this.attachConnectionListeners(guildId);
+          console.log(`[Voice][${guildId}] replacement connection created status=${this.connection.state.status}`);
         }
       }
     }
@@ -331,7 +350,41 @@ GuildMusicPlayer.prototype.attachConnectionListeners = function attachConnection
   const connection = this.connection;
 
   const onStateChange = async (oldState, newState) => {
-    console.log(`[Voice][${guildId}] connection state: ${oldState.status} -> ${newState.status}`);
+    if (newState.networking && !newState.networking.__peakxelCloseProbeAttached) {
+      Object.defineProperty(newState.networking, '__peakxelCloseProbeAttached', {
+        value: true,
+        configurable: false,
+        enumerable: false,
+        writable: false
+      });
+
+      newState.networking.once('close', (code) => {
+        console.warn(`[Voice][${guildId}] voice networking closed with code=${code}`);
+      });
+    }
+
+    const stateMeta = [];
+    if (typeof newState.reason !== 'undefined') {
+      stateMeta.push(`reason=${newState.reason}`);
+    }
+    if (typeof newState.closeCode !== 'undefined') {
+      stateMeta.push(`closeCode=${newState.closeCode}`);
+    }
+
+    console.log(
+      `[Voice][${guildId}] connection state: ${oldState.status} -> ${newState.status}${
+        stateMeta.length ? ` (${stateMeta.join(', ')})` : ''
+      }`
+    );
+
+    if (oldState.status === VoiceConnectionStatus.Connecting && newState.status === VoiceConnectionStatus.Signalling) {
+      const networkingCode = oldState.networking?.state?.code;
+      console.warn(
+        `[Voice][${guildId}] networking dropped while connecting${
+          typeof networkingCode === 'number' ? ` (networkingCode=${networkingCode})` : ''
+        }. Discord requested rejoin.`
+      );
+    }
 
     if (newState.status !== VoiceConnectionStatus.Disconnected) {
       return;
@@ -355,13 +408,26 @@ GuildMusicPlayer.prototype.attachConnectionListeners = function attachConnection
     }
   };
 
+  const onError = (error) => {
+    console.error(`[Voice][${guildId}] connection error:`, error);
+  };
+
+  const onDebug = (message) => {
+    if (VOICE_DEBUG_ENABLED) {
+      console.log(`[Voice][${guildId}] debug: ${message}`);
+    }
+  };
+
   connection.on('stateChange', onStateChange);
+  connection.on('error', onError);
+  connection.on('debug', onDebug);
 
   this.connectionListenerCleanup = () => {
     connection.off('stateChange', onStateChange);
+    connection.off('error', onError);
+    connection.off('debug', onDebug);
   };
 };
-
 GuildMusicPlayer.prototype.detachConnectionListeners = function detachConnectionListeners() {
   if (this.connectionListenerCleanup) {
     this.connectionListenerCleanup();
