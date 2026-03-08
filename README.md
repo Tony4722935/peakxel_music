@@ -1,13 +1,16 @@
-# Peakxel Discord Music App
+﻿# Peakxel Discord Music App
 
-A Discord bot that scans a local music folder at startup and builds an in-memory playlist cache.
+Discord music bot that reads playlists from local folders and streams them to Discord voice channels.
 
-- Each subfolder inside the runtime music root is treated as a playlist (`./music` for npm, `/music` in Docker).
-- Playlist name = folder name.
-- Supported files: `.mp3` and `.flac`.
-- To refresh playlists, update files/folders and restart the app.
+## Requirements
 
-## Folder structure
+- Node.js 22.12.0 or newer
+- Discord bot token + application client ID + guild ID
+- FFmpeg (included automatically in Docker image)
+
+## Music Library Layout
+
+Each subfolder is treated as one playlist.
 
 ```text
 music/
@@ -18,89 +21,121 @@ music/
     song_a.mp3
 ```
 
-## Local setup (Node)
+Supported file types:
 
-This project now requires Node.js 22.12+ because Discord voice servers enforce DAVE protocol support (4017 close code).
+- `.mp3`
+- `.flac`
 
-1. Install dependencies:
+## Configuration
+
+Core environment variables:
+
+- `DISCORD_TOKEN`
+- `DISCORD_CLIENT_ID`
+- `DISCORD_GUILD_ID`
+- `MUSIC_LIBRARY_PATH` (Docker only)
+
+`/.env.example` contains these values.
+
+## Run With npm (Local)
+
+For npm/local runs, music must be under this project folder:
+
+- `./music`
+
+Steps:
+
+1. Install dependencies.
    ```bash
    npm install
    ```
-   The dependency set already includes `@noble/ciphers`, `libsodium-wrappers`, and `@snazzah/davey`, so no extra voice dependency install step is needed.
-2. Create a Discord application + bot and invite it to your server with bot + applications.commands scopes.
-3. Configure environment values (the app automatically loads them from a local `.env` file if present):
-   - `DISCORD_TOKEN`
-   - `DISCORD_CLIENT_ID`
-   - `DISCORD_GUILD_ID`
+2. Create `.env` with:
+   ```dotenv
+   DISCORD_TOKEN=...
+   DISCORD_CLIENT_ID=...
+   DISCORD_GUILD_ID=...
+   ```
+3. Start bot.
+   ```bash
+   npm start
+   ```
 
-For npm runs, place playlist folders under the local `music/` directory in this project.
+## Run With Docker (Production)
 
-Example `.env`:
+For Docker runs, host music path comes from `MUSIC_LIBRARY_PATH` and is mounted to `/music` in container.
 
-```dotenv
-DISCORD_TOKEN=...
-DISCORD_CLIENT_ID=...
-DISCORD_GUILD_ID=...
-```
-
-Then run:
-
-```bash
-npm start
-```
-
-## Docker setup
-
-1. Copy the env template and fill it:
+1. Create env file.
    ```bash
    cp .env.example .env
    ```
-2. Update `.env` values:
-   - `DISCORD_TOKEN`
-   - `DISCORD_CLIENT_ID`
-   - `DISCORD_GUILD_ID`
-   - `MUSIC_LIBRARY_PATH` (absolute host path containing playlist folders)
-
-   Optional advanced networking variables (not included in `.env.example`):
-   - `DISCORD_DNS_RESULT_ORDER` (default `ipv4first`)
-   - `DOCKER_NETWORK_MODE` (default `host`; set `bridge` if host mode is unavailable)
-3. Start the bot:
-   ```bash
-   docker compose up -d --build
+2. Fill `.env`.
+   ```dotenv
+   DISCORD_TOKEN=...
+   DISCORD_CLIENT_ID=...
+   DISCORD_GUILD_ID=...
+   MUSIC_LIBRARY_PATH=/absolute/path/to/your/music
    ```
-4. View logs:
+3. Build image.
    ```bash
-   docker compose logs -f
+   docker compose build
+   ```
+4. Start in background.
+   ```bash
+   docker compose up -d
    ```
 
-The compose file mounts your host music library as read-only at `/music` in the container and sets `MUSIC_ROOT=/music`. It also defaults to `network_mode: host` so Discord voice UDP traffic works reliably in Docker on Linux hosts.
+## Docker Operations
 
-The Docker image installs `ffmpeg` (required by the playback pipeline) and installs Node dependencies from `package.json` (including a supported voice encryption backend). Playback uses FFmpeg Opus output directly, so no additional Node Opus module is required in the container. If you were already running the bot, rebuild after pulling changes: `docker compose up -d --build --force-recreate`.
+- Stop and remove running container(s):
+  ```bash
+  docker compose down
+  ```
+- Build image:
+  ```bash
+  docker compose build
+  ```
+- Build and start fresh:
+  ```bash
+  docker compose down
+  docker compose build --no-cache
+  docker compose up -d
+  ```
+- Recreate with latest compose config:
+  ```bash
+  docker compose up -d --build --force-recreate
+  ```
+- Follow logs:
+  ```bash
+  docker compose logs -f
+  ```
 
-## Slash commands
+## Slash Commands
 
-- `/play playlist:<name>` - queue the full playlist in a freshly shuffled order each time.
-- `/skip` - skip current track.
-- `/shuffle` - shuffle queue.
-- `/queue` - show up to 10 tracks in the current queue (includes now playing and next).
-- `/volume level:<0-200>` - set volume for upcoming tracks (applies when next track starts).
-- `/leave` - leave voice channel and clear queue.
-- `/playlists` - list playlists discovered at startup.
-- `/help` - show command help.
+- `/play playlist:<name>`: queue playlist in shuffled order
+- `/queue`: show up to 10 tracks in queue (includes `[Playing]` and `[Next]`)
+- `/skip`: skip current track
+- `/shuffle`: shuffle queued tracks
+- `/volume level:<0-200>`: set volume for upcoming tracks
+- `/leave`: disconnect and clear queue
+- `/playlists`: list discovered playlists
+- `/help`: show help
 
 ## Notes
 
-- The library cache is generated once at startup.
-- If you add/remove files, restart the bot to refresh cache.
+- Library cache is built on startup.
+- After changing music files/folders, restart bot.
+- Global slash-command deletion can take time to propagate in Discord clients.
 
-## Voice connection troubleshooting
+## Troubleshooting
 
-- The bot now prints detailed voice lifecycle logs (connection state changes, ready attempts, and queue/playback events) to help diagnose Docker/network issues.
-- If voice connect repeatedly times out in Docker, keep `DISCORD_DNS_RESULT_ORDER=ipv4first` (default) to prevent IPv6-first DNS resolution from breaking the Discord voice handshake on hosts without working IPv6 routing.
-- If logs loop between `connecting` and `signalling` in Docker, use `DOCKER_NETWORK_MODE=host` (default in `docker-compose.yml`) on Linux so Discord voice UDP packets are not blocked by bridge/NAT behavior.
-- The bot logs the `@discordjs/voice` dependency report at startup and validates that a currently supported encryption library is actually installed (`@noble/ciphers`, `libsodium-wrappers`, `sodium`, `sodium-native`, or `@stablelib/xchacha20poly1305`). If none are installed, startup now fails fast with a clear `npm install` hint before attempting voice joins.
-- After changing env vars, recreate the container: `docker compose up -d --build --force-recreate`.
-- To print low-level voice networking logs while diagnosing connect failures, set `VOICE_DEBUG=true`.
-- To flush stale slash commands from a reused Discord application, run once with `DISCORD_FLUSH_GLOBAL_COMMANDS=true` (and optionally `DISCORD_FLUSH_GUILD_COMMANDS=true`), then remove those variables.
-- Global command deletion can take time to propagate in Discord clients.
-- If you still see `voice networking closed with code=4017`, verify the runtime is Node.js 22.12+ and reinstall dependencies.
+- Enable voice debug logs:
+  ```bash
+  VOICE_DEBUG=true npm start
+  ```
+- Flush stale slash commands from reused Discord app (run once):
+  ```bash
+  DISCORD_FLUSH_GLOBAL_COMMANDS=true DISCORD_FLUSH_GUILD_COMMANDS=true npm start
+  ```
+- If voice connect fails with DAVE-related close codes, verify:
+  - Node.js is 22.12.0+
+  - dependencies are installed from current `package.json`
