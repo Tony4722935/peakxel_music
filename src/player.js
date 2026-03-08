@@ -318,6 +318,18 @@ class GuildMusicPlayer {
     console.log('[Player] Queue shuffled.');
   }
 
+  getQueueSnapshot(limit = 10) {
+    const safeLimit = Math.max(1, Number.isFinite(limit) ? Math.floor(limit) : 10);
+    const nowPlaying = this.current ? { ...this.current } : null;
+    const upcomingLimit = nowPlaying ? safeLimit - 1 : safeLimit;
+    const upcoming = this.queue.slice(0, Math.max(0, upcomingLimit)).map((track) => ({ ...track }));
+
+    return {
+      nowPlaying,
+      upcoming,
+      totalTracks: (nowPlaying ? 1 : 0) + this.queue.length
+    };
+  }
   setVolume(percent) {
     this.volume = Math.max(0, Math.min(percent, 200)) / 100;
 

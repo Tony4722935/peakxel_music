@@ -75,6 +75,10 @@ function enforceNodeVersion() {
   process.exit(1);
 }
 
+function isEnvEnabled(value) {
+  return typeof value === 'string' && /^(1|true|yes|on)$/i.test(value.trim());
+}
+
 function firstNonEmptyEnv(...keys) {
   for (const key of keys) {
     const value = process.env[key];
@@ -139,6 +143,7 @@ const commandDefinitions = [
   },
   { name: 'skip', description: 'Skip the current song' },
   { name: 'shuffle', description: 'Shuffle the current queue' },
+  { name: 'queue', description: 'Show the current queue' },
   {
     name: 'volume',
     description: 'Set playback volume',
@@ -160,10 +165,29 @@ const commandDefinitions = [
 
 async function registerCommands() {
   const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
+  const flushGlobalCommands = isEnvEnabled(process.env.DISCORD_FLUSH_GLOBAL_COMMANDS);
+  const flushGuildCommands = isEnvEnabled(process.env.DISCORD_FLUSH_GUILD_COMMANDS);
+
   try {
+    if (flushGuildCommands) {
+      await rest.put(Routes.applicationGuildCommands(DISCORD_CLIENT_ID, DISCORD_GUILD_ID), {
+        body: []
+      });
+      console.log('[Commands] Flushed existing guild commands.');
+    }
+
+    if (flushGlobalCommands) {
+      await rest.put(Routes.applicationCommands(DISCORD_CLIENT_ID), {
+        body: []
+      });
+      console.log('[Commands] Flushed existing global commands.');
+      console.log('[Commands] Global command deletion may take time to propagate in Discord clients.');
+    }
+
     await rest.put(Routes.applicationGuildCommands(DISCORD_CLIENT_ID, DISCORD_GUILD_ID), {
       body: commandDefinitions
     });
+    console.log('[Commands] Registered ' + commandDefinitions.length + ' guild command(s).');
   } catch (error) {
     if (error?.status === 401) {
       console.error(
@@ -183,6 +207,7 @@ function commandHelpText() {
     '- /play playlist:<name> - queue songs from your cached library in a new random order each time',
     '- /skip - skip current track',
     '- /shuffle - shuffle queued tracks',
+    '- /queue - show the current queue (up to 10 tracks)',
     '- /volume level:<0-200> - set volume',
     '- /leave - disconnect and clear queue',
     '- /playlists - show playlist folders found on startup',
@@ -190,6 +215,43 @@ function commandHelpText() {
   ].join('\n');
 }
 
+function formatQueueMessage(snapshot) {
+  const hasNowPlaying = Boolean(snapshot.nowPlaying);
+  const hasUpcoming = snapshot.upcoming.length > 0;
+
+  if (!hasNowPlaying && !hasUpcoming) {
+    return 'Queue is empty.';
+  }
+
+  const lines = ['Current queue (up to 10 tracks):'];
+  let shown = 0;
+
+  if (hasNowPlaying) {
+    lines.push(`1. [Playing] **${snapshot.nowPlaying.name}**`);
+    shown += 1;
+  }
+
+  if (hasUpcoming) {
+    const nextNumber = hasNowPlaying ? 2 : 1;
+    lines.push(`${nextNumber}. [Next] **${snapshot.upcoming[0].name}**`);
+    shown += 1;
+
+    const remaining = snapshot.upcoming.slice(1);
+    const firstIndex = nextNumber + 1;
+    remaining.forEach((track, idx) => {
+      lines.push(`${firstIndex + idx}. ${track.name}`);
+      shown += 1;
+    });
+  } else if (hasNowPlaying) {
+    lines.push('No next track queued.');
+  }
+
+  if (snapshot.totalTracks > shown) {
+    lines.push(`...and ${snapshot.totalTracks - shown} more in queue.`);
+  }
+
+  return lines.join('\n');
+}
 const guildPlayers = new Map();
 
 function getGuildPlayer(guildId) {
@@ -317,6 +379,12 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.commandName === 'shuffle') {
       player.shuffleQueue();
       await interaction.reply('Shuffled the queue.');
+      return;
+    }
+
+    if (interaction.commandName === 'queue') {
+      const snapshot = player.getQueueSnapshot(10);
+      await interaction.reply(formatQueueMessage(snapshot));
       return;
     }
 

@@ -82,6 +82,7 @@ The Docker image installs `ffmpeg` (required by the playback pipeline) and insta
 - `/play playlist:<name>` - queue the full playlist in a freshly shuffled order each time.
 - `/skip` - skip current track.
 - `/shuffle` - shuffle queue.
+- `/queue` - show up to 10 tracks in the current queue (includes now playing and next).
 - `/volume level:<0-200>` - set volume for upcoming tracks (applies when next track starts).
 - `/leave` - leave voice channel and clear queue.
 - `/playlists` - list playlists discovered at startup.
@@ -100,4 +101,6 @@ The Docker image installs `ffmpeg` (required by the playback pipeline) and insta
 - The bot logs the `@discordjs/voice` dependency report at startup and validates that a currently supported encryption library is actually installed (`@noble/ciphers`, `libsodium-wrappers`, `sodium`, `sodium-native`, or `@stablelib/xchacha20poly1305`). If none are installed, startup now fails fast with a clear `npm install` hint before attempting voice joins.
 - After changing env vars, recreate the container: `docker compose up -d --build --force-recreate`.
 - To print low-level voice networking logs while diagnosing connect failures, set `VOICE_DEBUG=true`.
+- To flush stale slash commands from a reused Discord application, run once with `DISCORD_FLUSH_GLOBAL_COMMANDS=true` (and optionally `DISCORD_FLUSH_GUILD_COMMANDS=true`), then remove those variables.
+- Global command deletion can take time to propagate in Discord clients.
 - If you still see `voice networking closed with code=4017`, verify the runtime is Node.js 22.12+ and reinstall dependencies.
