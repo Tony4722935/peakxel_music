@@ -22,6 +22,7 @@ const VOICE_CONNECT_MAX_ATTEMPTS = 3;
 const VOICE_RECONNECT_GRACE_MS = 5_000;
 const VOICE_READY_RETRY_BACKOFF_MS = 1_500;
 const VOICE_DEBUG_ENABLED = String(process.env.VOICE_DEBUG || '').toLowerCase() === 'true';
+const PLAYER_MAX_MISSED_FRAMES = 25;
 
 function ensureFfmpegAvailable() {
   try {
@@ -83,19 +84,30 @@ function createTrackResource(track, volume = 1) {
       '-hide_banner',
       '-loglevel',
       'error',
+      '-nostdin',
+      '-fflags',
+      '+genpts',
       '-i',
       track.filePath,
       '-map',
       '0:a:0',
-      '-analyzeduration',
-      '0',
       '-vn',
       '-sn',
       '-dn',
       '-af',
-      'volume=' + volume,
+      'aresample=async=1:first_pts=0,volume=' + volume,
       '-c:a',
       'libopus',
+      '-application',
+      'audio',
+      '-frame_duration',
+      '20',
+      '-b:a',
+      '128k',
+      '-vbr',
+      'on',
+      '-compression_level',
+      '10',
       '-ar',
       '48000',
       '-ac',
@@ -128,7 +140,8 @@ class GuildMusicPlayer {
 
     this.player = createAudioPlayer({
       behaviors: {
-        noSubscriber: NoSubscriberBehavior.Pause
+        noSubscriber: NoSubscriberBehavior.Pause,
+        maxMissedFrames: PLAYER_MAX_MISSED_FRAMES
       }
     });
 
@@ -137,6 +150,10 @@ class GuildMusicPlayer {
     this.volume = 1;
     this.connection = null;
     this.connectionListenerCleanup = null;
+
+    this.player.on(AudioPlayerStatus.Buffering, () => {
+      console.warn('[Player] Audio player buffering; brief jitter may occur on unstable hosts/networks.');
+    });
 
     this.player.on(AudioPlayerStatus.Playing, () => {
       const currentName = this.current?.name || '(unknown)';
