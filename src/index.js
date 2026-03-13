@@ -94,7 +94,6 @@ enforceNodeVersion();
 
 const DISCORD_TOKEN = normalizeDiscordToken(firstNonEmptyEnv('DISCORD_TOKEN', 'TOKEN'));
 const DISCORD_CLIENT_ID = firstNonEmptyEnv('DISCORD_CLIENT_ID', 'APPLICATION_ID');
-const DISCORD_GUILD_ID = firstNonEmptyEnv('DISCORD_GUILD_ID', 'DEV_GUILD');
 const MUSIC_ROOT = process.env.MUSIC_ROOT || path.join(process.cwd(), 'music');
 const DISCORD_DNS_RESULT_ORDER = process.env.DISCORD_DNS_RESULT_ORDER || 'ipv4first';
 
@@ -103,8 +102,8 @@ if (typeof dns.setDefaultResultOrder === 'function') {
   console.log(`DNS result order set to: ${DISCORD_DNS_RESULT_ORDER}`);
 }
 
-if (!DISCORD_TOKEN || !DISCORD_CLIENT_ID || !DISCORD_GUILD_ID) {
-  console.error('Missing required env vars: DISCORD_TOKEN/TOKEN, DISCORD_CLIENT_ID/APPLICATION_ID, DISCORD_GUILD_ID/DEV_GUILD');
+if (!DISCORD_TOKEN || !DISCORD_CLIENT_ID) {
+  console.error('Missing required env vars: DISCORD_TOKEN/TOKEN, DISCORD_CLIENT_ID/APPLICATION_ID');
   process.exit(1);
 }
 
@@ -166,16 +165,8 @@ const commandDefinitions = [
 async function registerCommands() {
   const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
   const flushGlobalCommands = isEnvEnabled(process.env.DISCORD_FLUSH_GLOBAL_COMMANDS);
-  const flushGuildCommands = isEnvEnabled(process.env.DISCORD_FLUSH_GUILD_COMMANDS);
 
   try {
-    if (flushGuildCommands) {
-      await rest.put(Routes.applicationGuildCommands(DISCORD_CLIENT_ID, DISCORD_GUILD_ID), {
-        body: []
-      });
-      console.log('[Commands] Flushed existing guild commands.');
-    }
-
     if (flushGlobalCommands) {
       await rest.put(Routes.applicationCommands(DISCORD_CLIENT_ID), {
         body: []
@@ -184,10 +175,11 @@ async function registerCommands() {
       console.log('[Commands] Global command deletion may take time to propagate in Discord clients.');
     }
 
-    await rest.put(Routes.applicationGuildCommands(DISCORD_CLIENT_ID, DISCORD_GUILD_ID), {
+    await rest.put(Routes.applicationCommands(DISCORD_CLIENT_ID), {
       body: commandDefinitions
     });
-    console.log('[Commands] Registered ' + commandDefinitions.length + ' guild command(s).');
+    console.log('[Commands] Registered ' + commandDefinitions.length + ' global command(s).');
+    console.log('[Commands] Global command updates can take time to appear in Discord clients.');
   } catch (error) {
     if (error?.status === 401) {
       console.error(

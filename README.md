@@ -1,11 +1,11 @@
-﻿# Peakxel Discord Music App
+# Peakxel Discord Music App
 
 Discord music bot that reads playlists from local folders and streams them to Discord voice channels.
 
 ## Requirements
 
 - Node.js 22.12.0 or newer
-- Discord bot token + application client ID + guild ID
+- Discord bot token + application client ID
 - FFmpeg (included automatically in Docker image)
 
 ## Music Library Layout
@@ -32,7 +32,6 @@ Core environment variables:
 
 - `DISCORD_TOKEN`
 - `DISCORD_CLIENT_ID`
-- `DISCORD_GUILD_ID`
 - `MUSIC_LIBRARY_PATH` (Docker only)
 
 `/.env.example` contains these values.
@@ -53,7 +52,6 @@ Steps:
    ```dotenv
    DISCORD_TOKEN=...
    DISCORD_CLIENT_ID=...
-   DISCORD_GUILD_ID=...
    ```
 3. Start bot.
    ```bash
@@ -72,7 +70,6 @@ For Docker runs, host music path comes from `MUSIC_LIBRARY_PATH` and is mounted 
    ```dotenv
    DISCORD_TOKEN=...
    DISCORD_CLIENT_ID=...
-   DISCORD_GUILD_ID=...
    MUSIC_LIBRARY_PATH=/absolute/path/to/your/music
    ```
 3. Build image.
@@ -124,7 +121,7 @@ For Docker runs, host music path comes from `MUSIC_LIBRARY_PATH` and is mounted 
 
 - Library cache is built on startup.
 - After changing music files/folders, restart bot.
-- Global slash-command deletion can take time to propagate in Discord clients.
+- Global slash-command updates/deletions can take time to propagate in Discord clients.
 
 ## Troubleshooting
 
@@ -132,9 +129,9 @@ For Docker runs, host music path comes from `MUSIC_LIBRARY_PATH` and is mounted 
   ```bash
   VOICE_DEBUG=true npm start
   ```
-- Flush stale slash commands from reused Discord app (run once):
+- Flush stale global slash commands from a reused Discord app (run once):
   ```bash
-  DISCORD_FLUSH_GLOBAL_COMMANDS=true DISCORD_FLUSH_GUILD_COMMANDS=true npm start
+  DISCORD_FLUSH_GLOBAL_COMMANDS=true npm start
   ```
 - If voice connect fails with DAVE-related close codes, verify:
   - Node.js is 22.12.0+

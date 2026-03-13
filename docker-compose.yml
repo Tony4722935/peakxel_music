@@ -12,7 +12,6 @@ services:
     environment:
       DISCORD_TOKEN: ${DISCORD_TOKEN:-${TOKEN:-}}
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-${APPLICATION_ID:-}}
-      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-${DEV_GUILD:-}}
       MUSIC_ROOT: /music
       DISCORD_DNS_RESULT_ORDER: ${DISCORD_DNS_RESULT_ORDER:-ipv4first}
     volumes:
